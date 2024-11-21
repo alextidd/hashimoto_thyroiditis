@@ -1,2 +1,7 @@
 .nextflow*
 .nextflow/
+PTATO/resources/log/
+data/
+out/
+work/
+log/
