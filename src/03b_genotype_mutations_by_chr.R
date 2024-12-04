@@ -1,5 +1,4 @@
 #!/usr/bin/env Rscript
-# cd /lustre/scratch125/casm/team268im/at31/resolveome ; for chr in {1..22} X Y ; do cmd="module load ISG/rocker/rver/4.4.0; export R_LIBS_USER=$HOME/R-tmp-4.4; Rscript src/03b_genotype_nanoseq_mutations_by_chr.R PD63118 $chr" ; echo $cmd ; bsub -q long -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J genotype_pta_${chr} -o log/genotype_pta_${chr}_%J.out -e log/genotype_pta_${chr}_%J.err $cmd ; done
 
 # libraries
 library(magrittr)
@@ -15,10 +14,10 @@ option_list <- list(
   make_option("--mask", type = "numeric"),
   make_option("--mq", type = "numeric"))
 opts <- parse_args(OptionParser(option_list = option_list))
-print(paste0("pdid: ", opts$pdid, ", chr: ", opts$chr))
+print(opts)
 
 # dirs
-dir.create(opts$out_dir, showWarnings = FALSE)
+dir.create(opts$out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # get mutations
 muts <-
@@ -46,7 +45,7 @@ pta_muts <-
         # count all reads at site
         total_depth <- sum(calls[, c("A", "C", "G", "T", "a", "c", "g", "t",
                                      "DEL", "INS", "del", "ins")],
-                            na.rm = TRUE)
+                           na.rm = TRUE)
         
         # count ref reads at site
         # take first character (in case it is a deletion)
@@ -76,4 +75,4 @@ pta_muts <-
 # write mut calls to out
 pta_muts %>%
   readr::write_tsv(
-    paste0(opts$out_dir, "/pta_muts_", opts$pdid, "_", opts$chr, ".tsv"))
+    paste0(opts$out_dir, "/", opts$pdid, "_", opts$chr, ".tsv"))

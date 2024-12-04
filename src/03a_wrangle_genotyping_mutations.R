@@ -54,7 +54,8 @@ caveman_snps <-
   dplyr::inner_join(common_snps) %>%
   dplyr::transmute(pdid = "PD63118", chr = `#CHROM`, pos = POS, ref = REF,
                    mut = ALT) %>%
-  type_mutations()
+  type_mutations() %>%
+  dplyr::distinct()
 
 # write to file
 caveman_snps %>%
