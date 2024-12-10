@@ -35,7 +35,6 @@ tibble::tibble(
 dir.create("out/nf-resolveome/49882/")
 run <- "49882"
 tibble::tibble(
-  donor_id = "PD63118",
   plex_n = seq(1, 80)) %>%
   dplyr::transmute(
     donor_id = "PD63118", id = paste0("plex", plex_n), run, plex_n,
@@ -43,3 +42,18 @@ tibble::tibble(
                  plex_n, "/", run, "#", plex_n, ".cram"),
     mutations = paste0(wd, "/out/nf-resolveome/mutations.tsv")) %>%
   readr::write_tsv("out/nf-resolveome/49882/samplesheet.tsv")
+
+# samplesheet 49900 (80 cells with bait capture
+dir.create("out/nf-resolveome/49900/")
+tibble::tibble(
+  donor_id = "PD63118",
+  plex_n = seq(1, 80),
+  lane_n = 2) %>%
+  dplyr::transmute(
+    id = paste0("plex", plex_n), run = "49900", plex_n, donor_id,
+    lane = paste0("lane", lane_n),
+    bam = paste0("/seq/illumina/runs/", substr(run, 1, 2), "/", run, "/",
+                 lane, "/plex", plex_n, "/", run, "_", lane_n, "#", plex_n,
+                 ".cram"),
+    mutations = paste0(wd, "/out/nf-resolveome/mutations.tsv")) %>%
+  readr::write_tsv("out/nf-resolveome/49900/samplesheet.tsv")
