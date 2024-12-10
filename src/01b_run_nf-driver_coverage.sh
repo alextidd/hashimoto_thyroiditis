@@ -11,7 +11,6 @@ nextflow run ../nf-driver_coverage \
   --samplesheet out/driver_coverage/samplesheet.csv \
   --bulk \
   --no_chr \
-  --genes out/driver_coverage/genes.txt \
   --out_dir out/driver_coverage/ \
   --gencode_gff3 ../reference/gencode/GRCh37/gencode.v39lift37.annotation.no_chr.gff3.gz \
   --refcds ../reference/dndscv/RefCDS_human_hg19_GencodeV18_newcovariates.rda \
@@ -19,3 +18,5 @@ nextflow run ../nf-driver_coverage \
   -with-tower \
   -N at31@sanger.ac.uk \
   -resume
+  
+#  --genes out/driver_coverage/genes.txt \

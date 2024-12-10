@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # function: define mutation type based on ref and alt, split up mnvs and dnvs
 type_mutations <- function(df) {
   typed_df <-

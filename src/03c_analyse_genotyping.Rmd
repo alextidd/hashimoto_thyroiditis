@@ -14,7 +14,7 @@ output:
 ---
 
 ```{r setup, include = F, message = F, warning = F, echo = F}
-# rmarkdown::render('src/03c_analyse_genotyping.Rmd', output_file = 'analyse_genotyping.html', output_dir = 'out/genotyping/')
+# rmarkdown::render('src/03c_analyse_genotyping.Rmd', output_file = 'analyse_genotyping.html', output_dir = 'out/genotyping/49882')
 
 # chunk options
 knitr::opts_knit$set(root.dir = "../")
@@ -76,12 +76,19 @@ muts_and_snps <-
   c("caveman_snps", "nanoseq_mutations") %>%
   purrr::set_names() %>%
   purrr::map(function(x) {
-    list.files(paste0("out/genotyping/", x, "_genotyped_by_chr/high_qual/"),
+    list.files(paste0("out/genotyping/49882/", x, "_genotyped_by_chr/Q30/"),
                pattern = ".tsv$", full.names = TRUE) %>%
-      purrr::map(~ readr::read_tsv(.x) %>% dplyr::mutate(chr = as.character(chr))) %>%
+      purrr::map(function(y) {
+        y %>%
+          readr::read_tsv(col_types = list(chr = readr::col_character(),
+                                           ref = readr::col_character(),
+                                           mut = readr::col_character()))
+      }) %>%
+      # drop empty dataframes
+      {.[purrr::map_lgl(., ~nrow(.x) > 0)]} %>%
       dplyr::bind_rows() %>%
       dplyr::mutate(mut_vaf = mut_depth / total_depth,
-                    mut_id = paste(chr, pos, ref, mut, sep = "-")) 
+                    mut_id = paste(chr, pos, ref, mut, sep = "-"))
   }) %>%
   dplyr::bind_rows(.id = "source")
 ```
@@ -107,7 +114,8 @@ Which mutations had the top VAFs and what were their depths?
 
 ```{r}
 muts_and_snps %>%
-  dplyr::arrange(-mut_vaf) %>%
+  dplyr::filter(source == "nanoseq_mutations") %>%
+  dplyr::arrange(-mut_vaf, -mut_depth) %>%
   dplyr::filter(mut_vaf > 0) %>%
   dplyr::select(source, sample_id, mut_id, mut_vaf, mut_depth, total_depth) %>%
   head(15)
@@ -153,22 +161,42 @@ muts_and_snps %>%
 We can look at the distribution of VAFs among mutations with at least 2 
 supporting reads.
 
-```{r}
+```{r fig.height = 15}
 seq(1, 5) %>%
   purrr::map(function(min_depth) {
     p_dat <-
       muts_and_snps %>%
-      dplyr::filter(mut_depth >= min_depth, source == "nanoseq_mutations")
+      dplyr::filter(total_depth >= min_depth, source == "nanoseq_mutations",
+                    mut_vaf > 0)
     p_dat %>%
       ggplot(aes(x = mut_vaf)) +
       geom_histogram(bins = 100) +
-      ggtitle(paste0("Distribution of VAFs in PTA samples, min ",
-                    min_depth, " mutant reads (",
+      ggtitle(paste0("Distribution of non-zero VAFs in PTA samples, min ",
+                    min_depth, " total reads (",
                     dplyr::n_distinct(p_dat$mut_id), " mutations)")) +
       facet_grid(source ~ ., scales = "free_y") +
       scale_x_continuous(limits = c(0, 1))
   }) %>%
   patchwork::wrap_plots(ncol = 1)
+```
+
+We can compare the unbiased NanoSeq VAF to the PTA VAF. The axes in this plot 
+are log-scaled. The dashed line represents a VAF of 0.5.
+
+```{r}
+muts_and_snps %>%
+  dplyr::inner_join(nanoseq_muts) %>%
+  dplyr::filter(total_depth > 0) %>%
+  dplyr::mutate(unbiased_vaf = (bam_mut - times_called) / (bam_cov - duplex_cov)) %>%
+  ggplot(aes(x = unbiased_vaf, y = mut_vaf, size = total_depth, alpha = total_depth)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  geom_point() +
+  labs(main = "PTA VAF versus NanoSeq unbiased VAF",
+       x = "NanoSeq unbiased VAF",
+       y = "PTA VAF") +
+  scale_x_log10() +
+  scale_y_log10() +
+  theme_classic()
 ```
 
 We can look at the distribution of VAFs among mutations called more than once in 
@@ -207,4 +235,5 @@ muts_and_snps %>%
   geom_point() +
   ggtitle("VAFs in PTA versus times called in Nanoseq")
 ```
+
 

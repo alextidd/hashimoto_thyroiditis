@@ -4,7 +4,6 @@ library(magrittr)
 # samplesheet
 ss <- readr::read_csv("out/driver_coverage/samplesheet.csv")
 genes <- readLines("out/driver_coverage/genes.txt")
-
 # get coverage
 cov <-
   ss$id %>%
