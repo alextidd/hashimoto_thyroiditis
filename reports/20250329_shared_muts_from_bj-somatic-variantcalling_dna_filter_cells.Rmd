@@ -1,5 +1,5 @@
 ---
-title: "Shared mutations from the bj-somatic-variantcalling DNAhyb output on filtered cells"
+title: "Shared mutations from the bj-somatic-variantcalling WGS output on filtered cells"
 author: "Alexandra Tidd"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -16,14 +16,14 @@ params:
 ---
 
 ```{r setup, include = F}
-# rmarkdown::render('reports/20250321_shared_muts_from_bj-somatic-variantcalling_dnahyb_filter_cells.Rmd', output_file = '20250321_shared_muts_from_bj-somatic-variantcalling_dnahyb_filter_cells.html', output_dir = 'reports/')
+# rmarkdown::render('reports/20250329_shared_muts_from_bj-somatic-variantcalling_dna_filter_cells.Rmd', output_file = '20250329_shared_muts_from_bj-somatic-variantcalling_dna_filter_cells.html', output_dir = 'reports/')
 
 # chunk options
 knitr::opts_knit$set(root.dir = "../")
 knitr::opts_chunk$set(warning = FALSE,
                       dpi = 600,
                       message = FALSE,
-                      cache.path = "reports/20250321_shared_muts_from_bj-somatic-variantcalling_dnahyb_filter_cells_cache/")
+                      cache.path = "reports/20250329_shared_muts_from_bj-somatic-variantcalling_dna_filter_cells_cache/")
 
 # set buffer for reading long lines in vcfs
 Sys.setenv("VROOM_CONNECTION_SIZE" = 2^20) # 1MB buffer
@@ -144,8 +144,8 @@ We pick out a BaseJumper run.
 
 ```{r bj_dir}
 # get the latest run
-bj_dir <- "out/BaseJumper/bj-somatic-variantcalling/filter_cells/dnahyb/"
-bj_run_dir <- file.path(bj_dir, "PD63118_250321_115728")
+bj_dir <- "out/BaseJumper/bj-somatic-variantcalling/filter_cells/dna/"
+bj_run_dir <- file.path(bj_dir, "PD63118_250328_112954")
 vcfs_subdir <- "/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SUBSET_VCF_VARIANTS/"
 ```
 
@@ -342,6 +342,15 @@ vafs_trinuc <-
 plot_mut_trinucs(vafs_trinuc, "All cells")
 ```
 
+## Plot trinucleotide spectrum (all cells, shared mutations)
+
+```{r plot_spectra_shared, fig.height = 5, fig.width = 11}
+vafs %>%
+  dplyr::group_by(chr, pos, ref, alt) %>%
+  dplyr::filter(dplyr::n() > 1) %>%
+  plot_mut_trinucs("All cells, shared mutations")
+```
+
 ## Plot trinucleotide spectrum per celltype
 
 ```{r plot_spectra_per_ct, fig.height = 5, fig.width = 11}
@@ -475,6 +484,19 @@ vafs %>%
   dplyr::select(mut_id, gene, id, aachange, ntchange, codonsub, impact,
                 ref_depth, alt_depth, alt_vaf) %>%
   knitr::kable()
+```
+
+# Case study: plate3_wellD4 + plate3_wellE11
+
+```{r case_study}
+clone_vafs <-
+  vafs %>%
+  dplyr::group_by(chr, pos, ref, alt) %>%
+  dplyr::mutate(cell_ids = paste(sort(unique(cell_id)), collapse = ",")) %>%
+  dplyr::filter(cell_ids == "plate3_wellD4,plate3_wellE11") %>%
+  dplyr::ungroup()
+clone_vafs %>%
+  dplyr::count(chr)
 ```
 
 # Beta binomial
