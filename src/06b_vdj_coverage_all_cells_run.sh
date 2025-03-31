@@ -4,14 +4,14 @@
 # run mosdepth
 wd=$(pwd)
 (
-  cd out/vdj_coverage/
+  cd out/vdj_coverage/all_cells/
   nextflow run $wd/../nextflow/nf-mosdepth \
     --samplesheet samplesheet.csv \
-    --bait_set regions/ig_tcr_genes.bed \
+    --bait_set ../regions/ig_tcr_genes.bed \
     --fasta /lustre/scratch124/casm/team78pipelines/canpipe/live/ref/Homo_sapiens/GRCh38_full_analysis_set_plus_decoy_hla/genome.fa \
     --location local \
     --out_dir ./ \
-    -w $wd/work/mosdepth/ \
+    -w $wd/work/mosdepth/all_cells/ \
     -resume \
     -N at31@sanger.ac.uk \
     -with-tower
@@ -21,7 +21,7 @@ wd=$(pwd)
 module load bedtools2-2.29.0/python-3.10.10
 module load tabix/1.18
 
-for bed in out/vdj_coverage/PD63118/*/mosdepth/*.per-base.bed.gz ; do
+for bed in out/vdj_coverage/all_cells/PD63118/*/mosdepth/*.per-base.bed.gz ; do
   echo $bed
   bedtools intersect \
     -a <(zcat $bed) \
