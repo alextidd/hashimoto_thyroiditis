@@ -7,6 +7,12 @@ library(magrittr)
 wd <- getwd()
 data_dir <- paste0(wd, "/data/resolveome/")
 
+# hard-code the run_id-to-plate conversion
+# "49686" = 1
+# "49882" = 3, "49900" = 3, "49901" = 3, "50072" = 3
+# "50227" = 10, "50382" = 10
+# "50367" = 11
+
 # read in manifests
 manifests <-
   list.files("data/manifest/", pattern = ".xlsx$", full.names = TRUE) %>%
@@ -18,42 +24,42 @@ manifests <-
   })
 
 # run49686_lane3 (7761stdy_manifest_25650_031024)
-# filter samples and fix supplier sample names
+# filter samples and fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_25650_031024"]] <-
   manifests[["7761stdy_manifest_25650_031024"]] %>%
   dplyr::filter(grepl("^Hashimoto", supplier_sample_name)) %>%
   dplyr::mutate(
-    supplier_sample_name = paste0("PD63118_HYB_",
+    supplier_sample_name = paste0("PD63118_P1_HYB_",
                                   gsub(".* - ", "", supplier_sample_name)))
 
 # run49686_lane4-5 (7761stdy_manifest_25654_041024)
-# fix supplier sample names
+# fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_25654_041024"]] <-
   manifests[["7761stdy_manifest_25654_041024"]] %>%
   dplyr::mutate(
-    supplier_sample_name = paste0("PD63118_", gsub(" - ", "_",
-                                                   supplier_sample_name)))
+    supplier_sample_name = paste0("PD63118_P1_", gsub(" - ", "_",
+                                                      supplier_sample_name)))
 
-# run50227_lane7 (7761stdy_manifest_26617_Hyb_manifest_run50227_lane7_corrected)
-# fix supplier sample names
-manifests[["7761stdy_manifest_26617_Hyb_manifest_run50227_lane7_corrected"]] <-
-  manifests[["7761stdy_manifest_26617_Hyb_manifest_run50227_lane7_corrected"]] %>%
+# run49882_lane1-8 (7761stdy_manifest_26013_211124_DNA)
+# fix supplier sample names, adding plate number
+manifests[["7761stdy_manifest_26013_211124_DNA"]] <-
+  manifests[["7761stdy_manifest_26013_211124_DNA"]] %>%
   dplyr::mutate(
-    supplier_sample_name = gsub("_P10", "", supplier_sample_name))
+    supplier_sample_name = gsub("PD63118_", "PD63118_P3_", supplier_sample_name))
 
-# run50227_lane8 (7761stdy_manifest_26618_RNA_manifest_run50227_lane8_corrected)
-# fix supplier sample names
-manifests[["7761stdy_manifest_26618_RNA_manifest_run50227_lane8_corrected"]] <-
-  manifests[["7761stdy_manifest_26618_RNA_manifest_run50227_lane8_corrected"]] %>%
+# run49900_lane2 (7761stdy_manifest_26014_211124_Hyb)
+# fix supplier sample names, adding plate number
+manifests[["7761stdy_manifest_26014_211124_Hyb"]] <-
+  manifests[["7761stdy_manifest_26014_211124_Hyb"]] %>%
   dplyr::mutate(
-    supplier_sample_name = gsub("_P10", "", supplier_sample_name))
+    supplier_sample_name = gsub("PD63118_", "PD63118_P3_", supplier_sample_name))
 
-# run 49901_lane8 (7894stdy_manifest_26015_211124_RNA)
+# run49901_lane8 (7894stdy_manifest_26015_211124_RNA)
 # remove control (!= "1 cell") and low-yield (quant < 2) wells
 # also, there is a typo in the manifest, where 7894STDY15290419 and
 # 7894STDY15290420 are both assigned as PD63118_RNA_F10, while no sample is
 # assigned to PD63118_RNA_G10. i will fix this by assigning 7894STDY15290420 to
-# PD63118_RNA_G10.
+# PD63118_RNA_G10. add plate number to supplier sample name.
 pre_pcr_quants <-
   "data/plate_layout/2024-11-13_Hashimoto_PD63118_Plate3_PlateLayout_dna_pre_pcr_quants.tsv" %>%
   readr::read_tsv() %>%
@@ -74,7 +80,9 @@ manifests[["7894stdy_manifest_26015_211124_RNA"]] <-
   dplyr::mutate(
     supplier_sample_name = ifelse(sanger_sample_id == "7894STDY15290420",
                                   "PD63118_RNA_G10", supplier_sample_name)) %>%
-  dplyr::filter(supplier_sample_name %in% pass_samples)
+  dplyr::filter(supplier_sample_name %in% pass_samples) %>%
+  dplyr::mutate(supplier_sample_name = gsub("PD63118_", "PD63118_P3_",
+                                            supplier_sample_name))
 
 # combine standardised manifests
 manifest <-
@@ -90,19 +98,13 @@ seqscape <-
   janitor::clean_names() %>%
   tidyr::separate_wider_delim("id", delim = "_", names = c("run_id", "lane"))
 
-# hard-code the run_id-to-plate conversion
-run_id_to_plate <-
-  c("49686" = 1,
-    "49882" = 3, "49900" = 3, "49901" = 3, "50072" = 3,
-    "50227" = 10)
-
 # ss irods - combine manifest and sequencescape
 # generate cell_id - plate{plate}_well{well}
 # generate id      - plate{plate}_well{well}_{seq_type}_run{run_id}
 ss <-
   dplyr::inner_join(manifest, seqscape) %>%
   tidyr::separate_wider_delim("supplier_sample_name", delim = "_",
-                              names = c("pdid", "seq_type", "well"),
+                              names = c("pdid", "plate", "seq_type", "well"),
                               cols_remove = FALSE) %>%
   dplyr::mutate(
     # specify all HYB sequencing is from DNA
@@ -113,7 +115,7 @@ ss <-
     bam = paste0("/seq/illumina/runs/", substr(run_id, 1, 2), "/", run_id, "/",
                  lane_tmp, "/plex", npg_aliquot_index, "/", run_id, lane_n_tmp,
                  "#", npg_aliquot_index, ".cram"),
-    plate = run_id_to_plate[run_id]) %>%
+    plate = as.numeric(gsub("^P", "", plate))) %>%
   dplyr::transmute(
     cell_id = paste0("plate", plate, "_well", well),
     # merge the two duplicate RNA runs

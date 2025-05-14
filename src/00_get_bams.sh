@@ -24,7 +24,7 @@ wd=$(pwd)
 # run
 (
   cd data/resolveome/
-  cat samplesheet_irods.csv | grep "cell_id\|plate10_" \
+  cat samplesheet_irods.csv | grep "cell_id\|plate10_.*_dna_run50382" \
   > samplesheet_irods.tmp.csv
   nextflow run $wd/../nextflow/nf-get_bam \
     --samplesheet samplesheet_irods.tmp.csv \

@@ -47,16 +47,21 @@ plot_vaf_heatmap <- function(p_dat, p_title = "", annotations = c(), show_rownam
     annotation_col = annotations_col,
     color = rev(viridis::magma(100)),
     main = paste(p_title, "\nVAF heatmap\n",
-                 n_total_cells, "cells,", n_total_muts, "mutations")
-  )
+                 n_total_cells, "cells,", n_total_muts, "mutations"))
 }
 
 # function: plot vaf distribution with depth information
 plot_vaf_dist <- function(p_dat, p_title = "VAF distribution") {
-  n_muts <-
+  n_unique_muts <-
     p_dat %>%
     dplyr::distinct(chr, pos, ref, mut) %>%
-    nrow()
+    nrow() %>%
+    format(big.mark = ",", scientific = FALSE)
+  n_total_muts <-
+    p_dat %>%
+    nrow() %>%
+    format(big.mark = ",", scientific = FALSE)
+
   p_dat_binned <-
     p_dat %>%
     dplyr::mutate(
@@ -76,9 +81,77 @@ plot_vaf_dist <- function(p_dat, p_title = "VAF distribution") {
     ggplot2::geom_col() +
     ggplot2::scale_fill_viridis_d() +
     ggplot2::theme_classic() +
-    ggplot2::labs(title = p_title, subtitle = paste(n_muts, "mutations"),
+    ggplot2::labs(title = p_title,
+                  subtitle = paste(n_total_muts, "total mutations,",
+                                   n_unique_muts, "unique mutations"),
          x = "VAF bin", y = "n mutations") +
     ggplot2::lims(x = c(0, 1)) +
     ggplot2::scale_y_continuous(expand = c(0, 0))
   print(p)
+}
+
+# function: get the trinucleotide context of the muts
+get_mut_trinucs <- function(dat) {
+
+  # libraries
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(GenomicRanges)
+  library(dplyr)
+
+  # get snvs only
+  snvs <-
+    dat %>%
+    dplyr::filter(nchar(ref) == 1, nchar(alt) == 1)
+
+  # get the trinucleotide context
+  gr <- GRanges(
+    seqnames = snvs$chr,
+    ranges = IRanges(start = snvs$pos - 1, end = snvs$pos + 1)
+  )
+
+  # add context, annotate the pyrimidine base
+  snvs <-
+    snvs %>%
+    mutate(trinuc_ref = as.character(getSeq(BSgenome.Hsapiens.UCSC.hg19, gr)),
+           sub = paste(ref, alt, sep = ">"),
+           sub_py = dplyr::case_when(
+             ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", sub),
+             TRUE ~ sub),
+           trinuc_ref_py = dplyr::case_when(
+             ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", trinuc_ref),
+             TRUE ~ trinuc_ref))
+
+}
+
+# function: plot the trinucleotide context of the muts
+plot_mut_trinucs <- function(p_dat, p_title = "") {
+  sub_colours <-
+    c("C>A" = "dodgerblue", "C>G" = "black", "C>T" = "red",
+      "T>A" = "grey70", "T>C" = "olivedrab3", "T>G" = "plum2")
+  nucs <- c("T", "C", "G", "A")
+  py_nucs <- c("C", "T")
+  all_subs <-
+    expand.grid(do.call(paste0, expand.grid(nucs, py_nucs, nucs)), nucs) %>%
+    dplyr::transmute(trinuc_ref_py = Var1, ref = substr(Var1, 2, 2), alt = Var2,
+                     sub_py = paste0(ref, ">", alt)) %>%
+    dplyr::filter(alt != ref)
+
+  p_dat %>%
+    dplyr::mutate(n_cells = dplyr::n_distinct(cell_id)) %>%
+    dplyr::add_count(mut_id, name = "n_cells_w_mut") %>%
+    dplyr::count(sub_py, trinuc_ref_py) %>%
+    dplyr::right_join(all_subs) %>%
+    dplyr::mutate(n = ifelse(is.na(n), 0, n)) %>%
+    ggplot(aes(x = trinuc_ref_py, y = n, fill = sub_py)) +
+    geom_col() +
+    facet_grid(~ sub_py, scales = "free_x") +
+    guides(x = guide_axis(angle = 90)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(family = "mono"),
+          legend.position = "none") +
+    scale_fill_manual(values = sub_colours) +
+    scale_y_continuous(expand = c(0, 0)) +
+    labs(title = p_title,
+         subtitle = paste(format(nrow(p_dat), big.mark = ","), "mutations"),
+         x = "", y = "number of mutations")
 }

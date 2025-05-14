@@ -9,11 +9,12 @@ wd=$(pwd)
   cd out/nf-resolveome/dna/
   nextflow run $wd/../nextflow/nf-resolveome \
     --samplesheet samplesheet.csv \
+    --seq_type dna \
     --bait_set_hyb $wd/data/immune_panel/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg19.bed \
     --bait_set_vdj $wd/out/vdj_coverage/regions/ig_tcr_genes.bed \
-    --genes $wd/data/driver_genes/PD63118_driver_genes.txt \
     --fasta /lustre/scratch124/casm/team78pipelines/canpipe/live/ref/Homo_sapiens/GRCh37d5/genome.fa \
     --location local \
+    --baf_chrs 1,9 \
     --out_dir ./ \
     -w $wd/work/nf-resolveome/dna/ \
     -resume \

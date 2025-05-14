@@ -248,7 +248,7 @@ are log-scaled. The dashed line represents a VAF of 0.5.
 
 ```{r nanoseq_vaf_vs_pta_vaf}
 nanoseq_muts <-
-  readr::read_tsv("data/nanoseq/samplesheet.tsv") %>%
+  readr::read_tsv("data/nanoseq/PD63118/samplesheet.tsv") %>%
   purrr::pmap(function(muts_file, seq_type) {
     readr::read_tsv(muts_file) %>%
       dplyr::mutate(seq_type = seq_type)
