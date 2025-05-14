@@ -11,3 +11,5 @@ test.pdf
 multiqc_data
 figure-html/
 *_cache/
+reports/*.html
+reports/*.md
