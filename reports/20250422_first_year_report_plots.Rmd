@@ -362,7 +362,14 @@ We plot the allelic balance of the coverage.
 snps <-
   xfun::cache_rds({
     snps <-
-      read_tsv("out/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv")
+      c("dna", "dnahyb") %>%
+      purrr::set_names() %>%
+      purrr::map(~
+        read_tsv(file.path("out/nf-resolveome", .x,
+                 "PD63118/genotyping/snps/PD63118_genotyped_snps.tsv"))) %>%
+      bind_rows(.id = "seq_type") %>%
+      group_by(seq_type)
+    snps
   }, file = "snps.rds", rerun = params$rerun)
 
 # get binned vafs and depths
@@ -390,13 +397,12 @@ allelic_statuses <-
     ref_depth == 0 & mut_depth > 0 ~ "one",
     ref_depth == 0 & mut_depth == 0 ~ "neither")) %>%
   dplyr::count(id, allelic_status) %>%
-  group_by(id) %>%
+  group_by(seq_type, id) %>%
   mutate(n_snps = sum(n), prop = n / n_snps)
 saveRDS(allelic_statuses, "reports/20250422_first_year_report_plots_cache/allelic_statuses.rds")
 ```
 
-```{r plot_allelic_vaf_dist}
-# plot
+```{r plot_allelic_vaf_dist, fig.height = 8}
 p_snps_dat <-
   readRDS("reports/20250422_first_year_report_plots_cache/p_snps_dat.rds")
 p_snps_dat %>%
@@ -406,31 +412,39 @@ p_snps_dat %>%
   theme_classic() +
   labs(title = "VAF distribution", x = "VAF bin", y = "n mutations") +
   lims(x = c(0, 1)) +
-  scale_y_continuous(expand = c(0, 0))
+  scale_y_continuous(expand = c(0, 0)) +
+  facet_grid(seq_type ~ ., scales = "free_y")
 ```
 
 We plot the proportion of allelic dropout per cell.
 
-```{r plot_allelic_dropout}
+```{r plot_allelic_dropout, fig.width = 10}
 # get prop allelic dropout
 allelic_statuses <-
   readRDS("reports/20250422_first_year_report_plots_cache/allelic_statuses.rds")
 allelic_dropout <-
   allelic_statuses %>%
   filter(allelic_status %in% c("one", "neither")) %>%
-  group_by(id) %>%
-  summarise(id, name = "allelic dropout", value = sum(prop))
+  group_by(id, seq_type) %>%
+  summarise(name = "allelic dropout", value = sum(prop))
 
 # plot
 allelic_statuses %>%
-  left_join(allelic_statuses %>% filter(allelic_status == "both") %>% dplyr::select(id, arr = prop)) %>%
+  inner_join(ss_annot %>% select(id, cell_id)) %>%
+  left_join(
+    allelic_statuses %>%
+      filter(seq_type == "dnahyb", allelic_status == "both") %>%
+      ungroup() %>%
+      select(id, arr = prop)) %>%
   mutate(prop_lab = paste0(round(arr * 100) , "%")) %>%
-  ggplot(aes(x = reorder(id, -arr), y = prop, fill = allelic_status)) +
+  ggplot(aes(x = reorder(cell_id, -arr), y = prop, fill = allelic_status)) +
   geom_col(position = "stack") +
   guides(x = guide_axis(angle = -90)) +
   scale_fill_brewer(palette = "Set2") +
   theme_classic() +
-  labs(x = "")
+  labs(x = "") +
+  facet_grid(seq_type ~ .) +
+  scale_y_continuous(expand = c(0, 0))
 ```
 
 We plot the sequencing metrics.
@@ -452,10 +466,12 @@ p1 <-
     bind_rows(
       p_cov_dat %>%
         filter(name == "mean coverage", seq == "dna + dnahyb + rna") %>%
-        distinct(cell_id, cov = value),
+        transmute(cell_id, cov = value) %>%
+        distinct(),
       p_cov_dat %>%
         filter(name == "mean coverage", seq == "dnahyb + rna") %>%
-        distinct(cell_id, cov = value)
+        transmute(cell_id, cov = value) %>%
+        distinct()
     )) %>%
   ggplot(aes(x = reorder(cell_id, -cov), y = value)) +
   geom_col(position = "dodge") +
@@ -506,9 +522,13 @@ allelic_statuses_stats <-
 ```
 
 Mean proportion coverage was
-`r round(seq_stats$dna[["% genome covered"]]$mean)`%
+`r round(seq_stats$dna[["% genome covered"]]$mean)`% (range
+`r round(seq_stats$dna[["% genome covered"]]$min)`-
+`r round(seq_stats$dna[["% genome covered"]]$max)`%) 
 for DNA genome-wide, and
-`r round(seq_stats$dnahyb[["% panel covered"]]$mean)`%
+`r round(seq_stats$dnahyb[["% panel covered"]]$mean)`% (range
+`r round(seq_stats$dnahyb[["% panel covered"]]$min)`-
+`r round(seq_stats$dnahyb[["% panel covered"]]$max)`%) 
 for targeted DNA within the immune panel.
 Average coverage was
 `r round(seq_stats$dna[["mean coverage"]]$mean)`X (range
@@ -516,7 +536,7 @@ Average coverage was
 for the DNA genome-wide, and
 `r round(seq_stats$dnahyb[["mean coverage"]]$mean)`X (range
 `r round(seq_stats$dnahyb[["mean coverage"]]$min)`-`r round(seq_stats$dnahyb[["mean coverage"]]$max)`X)
-for the targeted DNA within the immune panel [see supplementary figure X].
+for the targeted DNA within the immune panel.
 
 Across heterozygous SNPs, the mean rate of allelic dropout per cell was
 `r allelic_statuses_stats$one$mean + allelic_statuses_stats$neither$mean`%. 
@@ -536,8 +556,7 @@ In the RNA sequencing, the average number of unique genes counted per cell was
 and the average total count per cell was
 `r format(round(seq_stats$rna[["n counts"]]$mean), big.mark = ",", scientific = FALSE)` (range
 `r format(seq_stats$rna[["n counts"]]$min, big.mark = ",", scientific = FALSE)` -
-`r format(seq_stats$rna[["n counts"]]$max, big.mark = ",", scientific = FALSE)`)
-[see supplementary figure X].
+`r format(seq_stats$rna[["n counts"]]$max, big.mark = ",", scientific = FALSE)`).
 
 # Copy number and LOH profiles
 
@@ -1073,7 +1092,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
     tibble::as_tibble() %>%
     distinct() %>%
     dplyr::transmute(chr = seqnames, pos_37 = start, pos) %>%
-    inner_join(bj_muts_38) %>%
+    inner_join(bj_muts_per_seq_type_38) %>%
     mutate(pos = pos_37, mut_id = paste(chr, pos, ref, mut, sep = "_")) %>%
     select(-pos_37)
 
@@ -1099,12 +1118,6 @@ bj_muts_per_seq_type <- xfun::cache_rds({
   bj_muts_per_seq_type
 
 }, file = "bj_muts_per_seq_type.rds", rerun = params$rerun)
-```
-
-We plot a heatmap of all mutations.
-
-```{r}
-plot_vaf_heatmap(bj_muts_per_seq_type %>% mutate(alt = mut))
 ```
 
 We visualise the global VAF distribution.

@@ -45,6 +45,7 @@ png_files <-
           chr = c("all", "chr1", "chr9")) %>%
   mutate(label = paste(cell_id, seq_type, chr)) %>%
   arrange(label) %>%
+  filter(file.exists(png)) %>%
   {split(.$png, .$label)} %>%
   unlist()
 ```

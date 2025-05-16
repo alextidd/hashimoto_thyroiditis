@@ -1,5 +1,9 @@
 #!/bin/bash
-# cd /lustre/scratch125/casm/team268im/at31/resolveome ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J 03c_BaseJumper_expression_rna_run -o log/%J_03c_BaseJumper_expression_rna_run.out -e log/%J_03c_BaseJumper_expression_rna_run.err 'bash src/03c_BaseJumper_expression_rna_run.sh'
+# donor_id=PD63118
+# cd /lustre/scratch125/casm/team268im/at31/resolveome ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J 03c_BaseJumper_expression_rna_run -o log/%J_03c_BaseJumper_expression_rna_run.out -e log/%J_03c_BaseJumper_expression_rna_run.err "bash src/03c_BaseJumper_expression_rna_run.sh ${donor_id}"
+
+# parameters
+donor_id=$1
 
 # dirs
 wd=$(pwd)
@@ -13,15 +17,15 @@ export LSB_EXCLUSIVE=Y
 
 # run bj-expression
 (
-  cd out/BaseJumper/bj-expression/rna/
+  cd out/BaseJumper/bj-expression/rna/$donor_id/
   nextflow run $wd/../nextflow/external/BaseJumper/bj-expression \
     --input_csv samplesheet.csv \
-    --publish_dir PD63118 \
+    --publish_dir $donor_id \
+    --timestamp run \
     --genome GRCh38 \
     --skip_subsampling \
-    --timestamp run \
     --tmp_dir $TMPDIR \
-    -w $wd/work/BaseJumper/bj-expression/filter_cells/ \
+    -w $wd/work/BaseJumper/bj-expression/rna/$donor_id/ \
     -c $wd/config/basejumper.config \
     -c $wd/config/bj-expression.config \
     -profile singularity \

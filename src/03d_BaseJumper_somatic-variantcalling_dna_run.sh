@@ -1,5 +1,8 @@
 #!/bin/bash
-# cd /lustre/scratch125/casm/team268im/at31/resolveome ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J 03d_BaseJumper_somatic-variantcalling_dna_run -o log/%J_03d_BaseJumper_somatic-variantcalling_dna_run.out -e log/%J_03d_BaseJumper_somatic-variantcalling_dna_run.err 'bash src/03d_BaseJumper_somatic-variantcalling_dna_run.sh'
+# donor_id=PD63118 ; cd /lustre/scratch125/casm/team268im/at31/resolveome ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J 03d_BaseJumper_somatic-variantcalling_dna_${donor_id}_run -o log/%J_03d_BaseJumper_somatic-variantcalling_dna_${donor_id}_run.out -e log/%J_03d_BaseJumper_somatic-variantcalling_dna_${donor_id}_run.err "bash src/03d_BaseJumper_somatic-variantcalling_dna_run.sh ${donor_id}"
+
+# parameters
+donor_id=$1
 
 # dirs
 wd=$(pwd)
@@ -13,10 +16,10 @@ export LSB_EXCLUSIVE=Y
 
 # run
 (
-  cd out/BaseJumper/bj-somatic-variantcalling/dna/
+  cd out/BaseJumper/bj-somatic-variantcalling/dna/$donor_id/
   nextflow run $wd/../nextflow/external/BaseJumper/bj-somatic-variantcalling \
     --input_csv samplesheet.csv \
-    --publish_dir PD63118 \
+    --publish_dir $donor_id \
     --timestamp run \
     --variant_workflow_type somatic_heuristic_filter \
     --dnascope_model_selection bioskryb129 \
@@ -24,11 +27,11 @@ export LSB_EXCLUSIVE=Y
     --skip_sigprofile false \
     -c $wd/config/bj-somatic-variantcalling.config \
     -c $wd/config/basejumper.config \
-    -w $wd/work/BaseJumper/bj-somatic-variantcalling/dna/ \
+    -w $wd/work/BaseJumper/bj-somatic-variantcalling/dna/$donor_id/ \
     -profile singularity \
     --architecture "x86_64" \
-    -resume \
-    -N at31@sanger.ac.uk
+    -N at31@sanger.ac.uk \
+    #-resume
 )
 
-# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03d_BaseJumper_somatic-variantcalling_dna_symlink -o "log/%J_03d_BaseJumper_somatic-variantcalling_dna_symlink.out" "source ~/.bashrc && replace_symlinks out/BaseJumper/bj-somatic-variantcalling/dna/PD63118_run/"
+# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03d_BaseJumper_somatic-variantcalling_dna_symlink -o "log/%J_03d_BaseJumper_somatic-variantcalling_dna_symlink.out" "source ~/.bashrc && replace_symlinks out/BaseJumper/bj-somatic-variantcalling/dna/"
