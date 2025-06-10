@@ -1,0 +1,77 @@
+- files:
+  - name: 7761stdy_manifest_26013_211124_DNA.xlsx
+    from: Stefanie Lensing
+    via: email
+    date: 2024-11-22
+    notes: |
+      DNA and Hyb samples are in the PTA thyroid (DNA) study, RNA samples are in
+      the PTA thyroid (RNA) study. Please find manifests attached. Samples are 
+      labelled according to their well location and are either labelled DNA, 
+      Hyb, or RNA. One thing that is different in this experiment, compared to 
+      the previous plate – I stuck to the fragmentation conditions in the 
+      ResolveOME protocol in this experiment. So the hyb fragments are a little 
+      larger. If this doesn’t cause any issues then this would make pipelining 
+      easier as you can use a single library prep for both the DNA and the hyb 
+      samples. The hyb plex is also bigger. Here I plexed 80 samples in a single 
+      hyb pool, previously I did 48 samples. Hyb capture was performed with your
+      immune panel.
+  - name: 7761stdy_manifest_26014_211124_Hyb.xlsx
+    from: Stefanie Lensing
+    via: email
+    date: 2024-11-22
+    notes: |
+      DNA and Hyb samples are in the PTA thyroid (DNA) study, RNA samples are in
+      the PTA thyroid (RNA) study. Please find manifests attached. Samples are 
+      labelled according to their well location and are either labelled DNA, 
+      Hyb, or RNA. One thing that is different in this experiment, compared to 
+      the previous plate – I stuck to the fragmentation conditions in the 
+      ResolveOME protocol in this experiment. So the hyb fragments are a little 
+      larger. If this doesn’t cause any issues then this would make pipelining 
+      easier as you can use a single library prep for both the DNA and the hyb 
+      samples. The hyb plex is also bigger. Here I plexed 80 samples in a single 
+      hyb pool, previously I did 48 samples. Hyb capture was performed with your
+      immune panel.
+  - name: 7894stdy_manifest_26015_211124_RNA.xlsx
+    from: Stefanie Lensing
+    via: email
+    date: 2024-11-22
+    notes: |
+      DNA and Hyb samples are in the PTA thyroid (DNA) study, RNA samples are in
+      the PTA thyroid (RNA) study. Please find manifests attached. Samples are 
+      labelled according to their well location and are either labelled DNA, 
+      Hyb, or RNA. One thing that is different in this experiment, compared to 
+      the previous plate – I stuck to the fragmentation conditions in the 
+      ResolveOME protocol in this experiment. So the hyb fragments are a little 
+      larger. If this doesn’t cause any issues then this would make pipelining 
+      easier as you can use a single library prep for both the DNA and the hyb 
+      samples. The hyb plex is also bigger. Here I plexed 80 samples in a single 
+      hyb pool, previously I did 48 samples. Hyb capture was performed with your
+      immune panel.
+  - name: 7761stdy_manifest_25650_031024.xlsx
+    from: Stefanie Lensing
+    via: email
+    date: 2024-11-07
+    notes: |
+      I tried to hyb capture ResolveOME samples to see if we can enrich for
+      regions of interest. I hyb captured the Hashimoto samples (PD63118 – Plate
+      1) and 29 PBMC samples from the automation test plate. I used the immune
+      panel for target enrichment. The data is here:
+      https://sfweb.internal.sanger.ac.uk:12443/perl/npg/run/49686 (lane 3).
+      The samples are mixed with RNA samples, but you can identify the hyb
+      samples as I have included this information in the sample name.
+  - name: 7761stdy_manifest_26617_Hyb_manifest_run50227_lane7_corrected.xlsx
+    from: Andrew Lawson
+    via: Slack
+    date: 2025-03-28
+    notes: |
+      Here is the plate layout and the manifests for the Hyb (50227 lane 7) and
+      RNA (50227 lane 8).
+  - name: 7761stdy_manifest_25654_041024.xlsx
+    link: https://sequencescape.psd.sanger.ac.uk/sdb/sample_manifests/25654/uploaded_spreadsheet
+    date: 2025-02-17
+  - name: 7761stdy_manifest_26891_150425_R_D.xlsx
+    link: https://sequencescape.psd.sanger.ac.uk/sdb/sample_manifests/26891/uploaded_spreadsheet
+    date: 2025-05-09
+  - name: 7761stdy_manifest_26916_230425_R_D.xlsx
+    link: https://sequencescape.psd.sanger.ac.uk/sdb/sample_manifests/26916/uploaded_spreadsheet
+    date: 2025-05-09

@@ -1,0 +1,6 @@
+- files: 
+  - name: ig_tcr_genes_pseudogenes.xls
+    from: Juliette Imbert
+    via: email
+    date: 2025-01-16
+    notes: We care about chromosomes 2, 7, 14 and 22.
