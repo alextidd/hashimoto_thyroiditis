@@ -57,7 +57,7 @@ We load the samplesheet.
 
 ```{r load_ss}
 man_insp <-
-  read_tsv("data/manual_inspection/2024-12-20_PD63118_PTA_BAF_LoH_CellType_Mut_Summary.tsv") %>%
+  read_tsv("data/manual_inspection/PD63118.tsv") %>%
   select(-c(id, run_id, seq_type)) %>%
   # fix loh_1p
   mutate(loh_1p = as.character(as.numeric(loh_1p))) %>%

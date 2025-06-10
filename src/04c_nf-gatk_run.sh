@@ -17,7 +17,7 @@ module load singularity/3.11.4
     --location local \
     --fasta $wd/data/gatk/grch38/genome.fa \
     --realign false \
-    -w $wd/work/nf-gatk/ \
+    -w $LUSTRE_TEAM/resolveome/work/nf-gatk/ \
     -N at31@sanger.ac.uk \
     -resume
 )

@@ -166,7 +166,7 @@ We load the samplesheet.
 
 ```{r load_data}
 man_insp <-
-  readr::read_tsv("data/manual_inspection/2024-12-20_PD63118_PTA_BAF_LoH_CellType_Mut_Summary.tsv") %>%
+  readr::read_tsv("data/manual_inspection/PD63118.tsv") %>%
   select(-id, -run_id)
 metadata <-
   readr::read_csv("data/resolveome/samplesheet_local.csv") %>%

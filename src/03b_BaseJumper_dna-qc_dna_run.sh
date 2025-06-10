@@ -24,7 +24,7 @@ export LSB_EXCLUSIVE=Y
     --timestamp run \
     --skip_ginkgo false \
     -c $wd/config/basejumper.config \
-    -w $wd/work/BaseJumper/bj-dna-qc/dna/$donor_id/ \
+    -w $LUSTRE_TEAM/resolveome/work/BaseJumper/bj-dna-qc/dna/$donor_id/ \
     -profile singularity \
     -N at31@sanger.ac.uk \
     -resume 

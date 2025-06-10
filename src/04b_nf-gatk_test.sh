@@ -17,7 +17,7 @@ module load singularity/3.11.4
     --location local \
     --fasta /lustre/scratch125/casm/team268im/fa8/117/PTA_49686/PTATO/resources/hg38/Homo_sapiens.GRCh38.dna_sm.toplevel.fa \
     --realign \
-    -w $wd/work/nf-gatk_test/ \
+    -w $LUSTRE_TEAM/resolveome/work/nf-gatk_test/ \
     -N at31@sanger.ac.uk \
     -resume
 )

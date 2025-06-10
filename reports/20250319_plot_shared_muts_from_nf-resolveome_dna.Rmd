@@ -87,7 +87,7 @@ We load the samplesheet.
 ```{r load_data}
 data_dir <- "out/nf-resolveome/dna/"
 man_insp <-
-  readr::read_tsv("data/manual_inspection/2024-12-20_PD63118_PTA_BAF_LoH_CellType_Mut_Summary.tsv") %>%
+  readr::read_tsv("data/manual_inspection/PD63118.tsv") %>%
   dplyr::filter(plate == 3, !chr_dropout, !suspected_doublet) %>%
   dplyr::distinct(cell_id, loh_1p, celltype_SHM, celltype_VDJ_recomb,
                   TNFRSF14_mut)

@@ -4,8 +4,7 @@
 library(magrittr)
 
 # dirs
-wd <- getwd()
-data_dir <- paste0(wd, "/data/resolveome/")
+data_dir <- file.path(Sys.getenv("LUSTRE_STAGING"), "resolveome")
 
 # hard-code the run_id-to-plate conversion
 # "49686" = 1
@@ -152,10 +151,6 @@ ss_local %>%
   dplyr::filter(dplyr::row_number() < 4) %>%
   readr::write_csv("out/test/samplesheet.csv")
 
-# wrangle plate10 manual inspection
-plate10_man_insp <-
-  readr::read_tsv("data/manual_inspection/2025-03-28_PTA_PD63118_Plate10.tsv")
-
 # add pre pcr quants
 dnahyb_pre_pcr_quants <-
   "data/plate_layout/2025-03-01_Hashimoto_PD63118_Plate10_PlateLayout_dnahyb_pre_pcr_quants.tsv" %>%
@@ -167,22 +162,3 @@ rna_pre_pcr_quants <-
   readr::read_tsv() %>%
   tidyr::pivot_longer(cols = -`...1`, values_to = "RNA_PrePCR_conc") %>%
   dplyr::transmute(well = paste0(`...1`, name), RNA_PrePCR_conc)
-
-# combine with ids
-plate10_man_insp %>%
-  dplyr::transmute(run_id = as.character(run_id), plex = paste0("plex", plex),
-                   n_cells, loh_1p, TNFRSF14_mut) %>%
-  dplyr::inner_join(
-    ss %>%
-      dplyr::filter(seq_type == "dnahyb") %>%
-      dplyr::mutate(plex = paste0("plex", plex_n))) %>% 
-  dplyr::left_join(dnahyb_pre_pcr_quants) %>%
-  dplyr::left_join(rna_pre_pcr_quants) %>%
-  dplyr::transmute(
-    id, run_id, n_cells, plex, cell_id, seq_type, DNA_PrePCR_conc, RNA_PrePCR_conc, suspected_doublet = "",
-    doublet_rationale = "", celltype_SHM = "", celltype_VDJ_recomb = "", class_switch_recombination_CSR = "", chr_dropout = "",
-    loh_1p, TNFRSF14_mut, TNFRSF14_mut_VAF = "", TNFRSF14_mut_in_NanoSeq_data = "", productive_heavy_chain = "",
-    heavy_chain_CDR3_nt_IgBLAST = "", heavy_chain_CDR3_aa_IgBLAST = "", unproductive_heavy_chain = "", heavy_chain_isotype = "",
-    productive_light_chain = "", identity_of_BCR_light_chain = "", productive_TRB_chain = "", productive_TRA_chain = "",
-    TRG_rearrangement = "", notes = "") %>%
-  readr::write_tsv("data/manual_inspection/2025-03-28_PTA_PD63118_Plate10_reformatted.tsv")

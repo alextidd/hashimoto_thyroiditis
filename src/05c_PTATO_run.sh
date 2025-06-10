@@ -15,7 +15,7 @@ wd=$(pwd)
     --out_dir ./ \
     -c $wd/config/ptato_run.config \
     -c $wd/config/ptato.config \
-    -w $wd/work/ptato/ \
+    -w $LUSTRE_TEAM/resolveome/work/ptato/ \
     --smurf.time '20d' \
     --smurf.cpus 24 \
     --walker.time '7d' \

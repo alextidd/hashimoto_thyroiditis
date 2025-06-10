@@ -19,7 +19,7 @@ module load singularity
     --timestamp run \
     -c $wd/config/bj-somatic-variantcalling.config \
     -c $wd/config/basejumper.config \
-    -w $wd/work/BaseJumper/bj-somatic-variantcalling/dna/$donor_id/ \
+    -w $LUSTRE_TEAM/resolveome/work/BaseJumper/bj-somatic-variantcalling/dna/$donor_id/ \
     -profile singularity \
     --architecture "x86_64" \
     -resume \

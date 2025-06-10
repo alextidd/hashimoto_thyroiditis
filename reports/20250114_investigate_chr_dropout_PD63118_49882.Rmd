@@ -36,7 +36,7 @@ in run 49882.
 ```{r}
 # samplesheet
 ss <-
-  readr::read_tsv("data/chr_dropout/2024-12-20_PD63118_PTA_BAF_LoH_CellType_Mut_Summary.tsv")
+  readr::read_tsv("data/chr_dropout/PD63118.tsv")
 knitr::kable(ss)
 ```
 

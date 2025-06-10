@@ -7,31 +7,16 @@ module load IRODS/1.0
 # dirs
 wd=$(pwd)
 
-# # run
-# (
-#   cd data/resolveome/
-#   nextflow run $wd/../nextflow/nf-get_bam \
-#     --samplesheet samplesheet_irods.csv \
-#     --location irods \
-#     --out_dir ./ \
-#     --cram_to_bam \
-#     --merge_bams \
-#     -resume \
-#     -w $wd/work/get_bams/ \
-#     -N at31@sanger.ac.uk
-# )
-
 # run
 (
-  cd data/resolveome/
-  cat samplesheet_irods.csv | grep "cell_id\|plate10_.*_dna_run50382" \
-  > samplesheet_irods.tmp.csv
+  cd $LUSTRE_STAGING/resolveome/data/
   nextflow run $wd/../nextflow/nf-get_bam \
-    --samplesheet samplesheet_irods.tmp.csv \
+    --samplesheet samplesheet_irods.csv \
     --location irods \
     --out_dir ./ \
     --cram_to_bam \
+    --merge_bams \
     -resume \
-    -w $wd/work/get_bams/ \
+    -w $LUSTRE_TEAM/resolveome/work/get_bams/ \
     -N at31@sanger.ac.uk
 )

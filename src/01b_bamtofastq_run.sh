@@ -15,7 +15,7 @@ module load singularity/3.11.4
 #     -profile singularity,sanger \
 #     --input samplesheet.csv \
 #     --outdir . \
-#     -w $wd/work/bamtofastq/ \
+#     -w $LUSTRE_TEAM/resolveome/work/bamtofastq/ \
 #     -resume \
 #     -N at31@sanger.ac.uk
 # )
@@ -29,7 +29,7 @@ module load singularity/3.11.4
     -profile singularity,sanger \
     --input samplesheet.tmp.csv \
     --outdir . \
-    -w $wd/work/bamtofastq/ \
+    -w $LUSTRE_TEAM/resolveome/work/bamtofastq/ \
     -resume \
     -N at31@sanger.ac.uk
 )

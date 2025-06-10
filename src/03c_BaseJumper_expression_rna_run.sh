@@ -25,7 +25,7 @@ export LSB_EXCLUSIVE=Y
     --genome GRCh38 \
     --skip_subsampling \
     --tmp_dir $TMPDIR \
-    -w $wd/work/BaseJumper/bj-expression/rna/$donor_id/ \
+    -w $LUSTRE_TEAM/resolveome/work/BaseJumper/bj-expression/rna/$donor_id/ \
     -c $wd/config/basejumper.config \
     -c $wd/config/bj-expression.config \
     -profile singularity \

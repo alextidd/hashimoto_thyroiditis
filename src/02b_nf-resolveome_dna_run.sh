@@ -16,7 +16,7 @@ wd=$(pwd)
     --location local \
     --baf_chrs 1,9 \
     --out_dir ./ \
-    -w $wd/work/nf-resolveome/dna/ \
+    -w $LUSTRE_TEAM/resolveome/work/nf-resolveome/dna/ \
     -resume \
     -N at31@sanger.ac.uk \
     -with-tower

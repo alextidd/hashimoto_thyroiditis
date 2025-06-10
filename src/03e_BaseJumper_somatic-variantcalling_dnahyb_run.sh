@@ -27,7 +27,7 @@ export LSB_EXCLUSIVE=Y
     -c $wd/config/bj-somatic-variantcalling_dnahyb.config \
     -c $wd/config/bj-somatic-variantcalling.config \
     -c $wd/config/basejumper.config \
-    -w $wd/work/BaseJumper/bj-somatic-variantcalling/dnahyb/$donor_id/ \
+    -w $LUSTRE_TEAM/resolveome/work/BaseJumper/bj-somatic-variantcalling/dnahyb/$donor_id/ \
     -profile singularity \
     --architecture "x86_64" \
     -resume \
