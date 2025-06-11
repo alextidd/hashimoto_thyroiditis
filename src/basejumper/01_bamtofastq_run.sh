@@ -8,26 +8,12 @@ wd=$(pwd)
 # modules
 module load singularity/3.11.4
 
-# # run
-# (
-#   cd out/bamtofastq/
-#   nextflow run nf-core/bamtofastq \
-#     -profile singularity,sanger \
-#     --input samplesheet.csv \
-#     --outdir . \
-#     -w $LUSTRE_TEAM/resolveome/work/bamtofastq/ \
-#     -resume \
-#     -N at31@sanger.ac.uk
-# )
-
 # run
 (
   cd out/bamtofastq/
-  cat samplesheet.csv | grep "sample_id\|plate10_.*_dna_run50382\|plate11" \
-  > samplesheet.tmp.csv
   nextflow run nf-core/bamtofastq \
     -profile singularity,sanger \
-    --input samplesheet.tmp.csv \
+    --input samplesheet.csv \
     --outdir . \
     -w $LUSTRE_TEAM/resolveome/work/bamtofastq/ \
     -resume \

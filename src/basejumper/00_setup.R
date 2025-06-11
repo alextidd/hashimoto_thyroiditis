@@ -8,9 +8,16 @@ library(dplyr)
 # dirs
 wd <- getwd()
 fastq_dir <- paste0(wd, "/out/bamtofastq/reads/")
+dir.create("out/bamtofastq/", showWarnings = FALSE)
 
 # read samplesheet
 ss <- readr::read_csv("data/resolveome/samplesheet_local.csv")
+
+# write samplesheet for fastqs
+ss %>%
+  dplyr::transmute(sample_id = id, mapped = bam, index = paste0(bam, ".bai"),
+                   file_type = "bam") %>%
+  readr::write_csv("out/bamtofastq/samplesheet.csv")
 
 # read manual inspection results, get clean cell ids (include all of plate 10)
 clean_cell_ids <-
@@ -18,7 +25,7 @@ clean_cell_ids <-
   map(readr::read_tsv) %>%
   bind_rows() %>%
   filter(!suspected_doublet | is.na(suspected_doublet),
-                !chr_dropout | is.na(chr_dropout)) %>%
+         !chr_dropout | is.na(chr_dropout)) %>%
   pull(cell_id)
 
 # create dnahyb/dna bj-somatic-variantcalling samplesheets
