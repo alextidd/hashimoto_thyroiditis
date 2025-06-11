@@ -1066,7 +1066,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
         pivot_longer(cols = -c("name", "mut_id"), names_to = "id") %>%
         pivot_wider() %>%
         separate_wider_delim(cols = "mut_id", delim = "_", cols_remove = FALSE,
-                            names = c("chr", "pos", "ref", "mut")) %>%
+                            names = c("chr", "pos", "ref", "alt")) %>%
         mutate(pos = as.numeric(pos)) %>%
         # calculate global VAFs
         group_by(mut_id) %>%
@@ -1093,7 +1093,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
     distinct() %>%
     dplyr::transmute(chr = seqnames, pos_37 = start, pos) %>%
     inner_join(bj_muts_per_seq_type_38) %>%
-    mutate(pos = pos_37, mut_id = paste(chr, pos, ref, mut, sep = "_")) %>%
+    mutate(pos = pos_37, mut_id = paste(chr, pos, ref, alt, sep = "_")) %>%
     select(-pos_37)
 
   # annotate bj_muts with mutation impacts using dndscv
@@ -1101,7 +1101,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
     bj_muts_per_seq_type %>%
     left_join(
       bj_muts_per_seq_type %>%
-        transmute(sampleID = "", chr = gsub("chr", "", chr), pos, ref, mut) %>%
+        transmute(sampleID = "", chr = gsub("chr", "", chr), pos, ref, alt) %>%
         distinct() %>%
         dndscv::dndscv(max_muts_per_gene_per_sample = Inf, outp = 1,
                        max_coding_muts_per_sample = Inf) %>%
@@ -1161,7 +1161,7 @@ bj_muts <- xfun::cache_rds({
     group_by(cell_id) %>%
     mutate(seq_type = paste(sort(unique(seq_type)), collapse = "+")) %>%
     group_by(across(-c(id, ends_with("_depth"), global_mut_vaf))) %>%
-    #group_by(chr, pos, ref, mut, mut_id, cell_id, seq_type) %>%
+    #group_by(chr, pos, ref, alt, mut_id, cell_id, seq_type) %>%
     summarise(mut_depth = sum(mut_depth), total_depth = sum(total_depth)) %>%
     ungroup() %>%
     mutate(mut_vaf = mut_depth / total_depth)
@@ -1176,7 +1176,7 @@ bj_muts_filter <-
   xfun::cache_rds({
     bj_muts %>%
       filter(mut_vaf > 0.3, mut_depth > 5) %>%
-      group_by(chr, pos, ref, mut) %>%
+      group_by(chr, pos, ref, alt) %>%
       mutate(n_cells_w_mut = n_distinct(cell_id),
             n_cells = n_distinct(bj_muts$cell_id)) %>%
       filter(n_cells_w_mut / n_cells < 0.5) %>%
@@ -1253,7 +1253,6 @@ Plot the VAF heatmap.
 ```{r plot_vaf_heatmap_bj_muts, fig.width = 10, fig.height = 8}
 bj_muts_filter %>%
   filter(impact != "Non-coding") %>%
-  mutate(alt = mut) %>%
   plot_vaf_heatmap(show_rownames = FALSE, annotations = c("loh_1p", "celltype_VDJ_SHM_CSR"))
 ```
 
@@ -1275,7 +1274,7 @@ n_coding_muts <-
 # n private mutations
 n_private_muts <-
   bj_muts_filter %>%
-  group_by(chr, pos, ref, mut) %>%
+  group_by(chr, pos, ref, alt) %>%
   filter(n_distinct(cell_id) == 1) %>%
   nrow() %>%
   format(big.mark = ",", scientific = FALSE)
@@ -1284,7 +1283,7 @@ n_private_muts <-
 n_private_coding_muts <-
   bj_muts_filter %>%
   filter(impact != "Non-coding") %>%
-  group_by(chr, pos, ref, mut) %>%
+  group_by(chr, pos, ref, alt) %>%
   filter(n_distinct(cell_id) == 1) %>%
   nrow() %>%
   format(big.mark = ",", scientific = FALSE)
@@ -1292,9 +1291,9 @@ n_private_coding_muts <-
 # n shared mutations
 n_shared_muts <-
   bj_muts_filter %>%
-  group_by(chr, pos, ref, mut) %>%
+  group_by(chr, pos, ref, alt) %>%
   filter(n_distinct(cell_id) > 1) %>%
-  distinct(chr, pos, ref, mut) %>%
+  distinct(chr, pos, ref, alt) %>%
   nrow() %>%
   format(big.mark = ",", scientific = FALSE)
 
@@ -1302,9 +1301,9 @@ n_shared_muts <-
 n_shared_coding_muts <-
   bj_muts_filter %>%
   filter(impact != "Non-coding") %>%
-  group_by(chr, pos, ref, mut) %>%
+  group_by(chr, pos, ref, alt) %>%
   filter(n_distinct(cell_id) > 1) %>%
-  distinct(chr, pos, ref, mut) %>%
+  distinct(chr, pos, ref, alt) %>%
   nrow() %>%
   format(big.mark = ",", scientific = FALSE)
 
@@ -1321,11 +1320,11 @@ mean_muts_per_cell <-
 muts_genos_overlap <-
   full_join(
     bj_muts_filter %>%
-      transmute(chr = gsub("^chr", "", chr), pos, ref, mut, cell_id,
+      transmute(chr = gsub("^chr", "", chr), pos, ref, alt, cell_id,
                 bj_muts = "bj_muts") %>%
       distinct(),
     genos_filter %>%
-      transmute(chr, pos, ref, mut = alt, cell_id, gene, genos = "genos") %>%
+      transmute(chr, pos, ref, alt, cell_id, gene, genos = "genos") %>%
       distinct()) %>%
   dplyr::count(bj_muts, genos) %>%
   mutate(overlap = paste(bj_muts, genos)) %>%
@@ -1358,7 +1357,6 @@ bj_muts_trinuc <-
   xfun::cache_rds({
     bj_muts_trinuc <-
       bj_muts_filter %>%
-      rename(alt = mut) %>%
       get_mut_trinucs()
     bj_muts_trinuc
   }, file = "bj_muts_trinuc.rds", rerun = params$rerun)
@@ -1368,15 +1366,12 @@ Plot trinucleotide spectrum.
 
 ```{r plot_spectra_good, fig.height = 5, fig.width = 11}
 bj_muts %>%
-  rename(alt = mut) %>%
   get_mut_trinucs() %>%
   plot_mut_trinucs("all bj-somatic-variantcalling calls")
 bj_muts_filter %>%
-  rename(alt = mut) %>%
   get_mut_trinucs() %>%
   plot_mut_trinucs("filtered bj-somatic-variantcalling calls")
 bj_muts %>%
-  rename(alt = mut) %>%
   group_by(mut_id) %>%
   filter(n_distinct(cell_id) > 1) %>%
   ungroup() %>%

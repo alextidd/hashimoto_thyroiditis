@@ -7,7 +7,7 @@ plot_vaf_heatmap <- function(p_dat, p_title = "", annotations = c(), show_rownam
     p_dat %>%
     dplyr::ungroup() %>%
     # only keep mutations with VAF > 0
-    dplyr::filter(mut_vaf > 0) %>%
+    dplyr::filter(alt_vaf > 0) %>%
     dplyr::mutate(mut_id = paste(gene, chr, pos, ref, alt, sep = "_")) %>%
     # count number of cells with each mutation
     dplyr::add_count(mut_id, name = "n_cells_w_mut")
@@ -15,7 +15,7 @@ plot_vaf_heatmap <- function(p_dat, p_title = "", annotations = c(), show_rownam
   # reshape data for heatmap
   heatmap_data <-
     p_dat2 %>%
-    reshape2::dcast(mut_id + n_cells_w_mut ~ cell_id, value.var = "mut_vaf")
+    reshape2::dcast(mut_id + n_cells_w_mut ~ cell_id, value.var = "alt_vaf")
   rownames(heatmap_data) <- heatmap_data$mut_id
   heatmap_matrix <-
     heatmap_data %>%
@@ -54,7 +54,7 @@ plot_vaf_heatmap <- function(p_dat, p_title = "", annotations = c(), show_rownam
 plot_vaf_dist <- function(p_dat, p_title = "VAF distribution") {
   n_unique_muts <-
     p_dat %>%
-    dplyr::distinct(chr, pos, ref, mut) %>%
+    dplyr::distinct(chr, pos, ref, alt) %>%
     nrow() %>%
     format(big.mark = ",", scientific = FALSE)
   n_total_muts <-
@@ -65,19 +65,19 @@ plot_vaf_dist <- function(p_dat, p_title = "VAF distribution") {
   p_dat_binned <-
     p_dat %>%
     dplyr::mutate(
-      mut_vaf = ifelse(total_depth == 0, 0, mut_vaf),
+      alt_vaf = ifelse(total_depth == 0, 0, alt_vaf),
       total_depth_bin = cut(
         total_depth, breaks = c(-Inf, 0, 10, 20, 50, 100, Inf),
         labels = c("0", "<10", "10–20", "20–50", "50–100", ">100")),
-      mut_vaf_bin = cut(mut_vaf, breaks = seq(0, 1, length.out = 30 + 1),
+      alt_vaf_bin = cut(alt_vaf, breaks = seq(0, 1, length.out = 30 + 1),
                         include.lowest = TRUE),
-      mut_vaf_min = stringr::str_extract(mut_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
-      mut_vaf_high = as.numeric(stringr::str_extract(mut_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
-      mut_vaf_mid = (mut_vaf_min + mut_vaf_high) / 2) %>%
-    dplyr::count(mut_vaf_bin, mut_vaf_mid, total_depth_bin)
+      alt_vaf_min = stringr::str_extract(alt_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
+      alt_vaf_high = as.numeric(stringr::str_extract(alt_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
+      alt_vaf_mid = (alt_vaf_min + alt_vaf_high) / 2) %>%
+    dplyr::count(alt_vaf_bin, alt_vaf_mid, total_depth_bin)
   p <-
     p_dat_binned %>%
-    ggplot2::ggplot(ggplot2::aes(x = mut_vaf_mid, y = n, fill = total_depth_bin)) +
+    ggplot2::ggplot(ggplot2::aes(x = alt_vaf_mid, y = n, fill = total_depth_bin)) +
     ggplot2::geom_col() +
     ggplot2::scale_fill_viridis_d() +
     ggplot2::theme_classic() +

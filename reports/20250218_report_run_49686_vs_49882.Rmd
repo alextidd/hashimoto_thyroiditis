@@ -124,7 +124,7 @@ We load the mutations from Nanoseq and the SNPs from CaVEMan...
 ```{r load_mutations}
 muts_and_snps <-
   readr::read_tsv("out/nf-resolveome/mutations.tsv") %>%
-  dplyr::distinct(source, pdid, chr, pos, ref, mut)
+  dplyr::distinct(source, pdid, chr, pos, ref, alt)
 muts_and_snps %>% dplyr::count(source)
 ```
 
@@ -142,7 +142,7 @@ geno <-
   }) %>%
   dplyr::bind_rows() %>%
   dplyr::mutate(mut_vaf = mut_depth / total_depth,
-                mut_id = paste(chr, pos, ref, mut)) %>%
+                mut_id = paste(chr, pos, ref, alt)) %>%
   dplyr::left_join(muts_and_snps) %>%
   # bin mutant depths
   dplyr::mutate(mut_depth_bin = dplyr::case_when(mut_depth > 50 ~ ">50",
@@ -176,13 +176,13 @@ plot_vaf_dist(geno) +
 plot_vaf_dist(dplyr::filter(geno, mut_depth > 0)) +
   ggtitle("Distribution of non-zero VAFs")
 
-# plot vaf dist with increasing mut depth
+# plot vaf dist with increasing alt depth
 seq(1,10) %>%
   purrr::map(function(min_mut_depth) {
     geno %>%
       dplyr::filter(mut_depth >= min_mut_depth) %>%
       plot_vaf_dist() +
-      ggtitle(paste("Distribution of VAFs, min", min_mut_depth, "mut depth"))
+      ggtitle(paste("Distribution of VAFs, min", min_mut_depth, "alt depth"))
   })
 ```
 
@@ -203,7 +203,7 @@ geno %>%
   geom_col(position = "stack") +
   ggh4x::facet_grid2(source ~ run, scales = "free", space = "free_x") +
   tidytext::scale_x_reordered(guide = guide_axis(angle = -90)) +
-  labs(title = "Proportion of mutations genotyped per source per mut depth",
+  labs(title = "Proportion of mutations genotyped per source per alt depth",
        x = "Plex",
        y = "Proportion of mutations genotyped") +
   theme_minimal() +
@@ -256,7 +256,7 @@ nanoseq_muts <-
   dplyr::bind_rows() %>%
   dplyr::mutate(pdid = stringr::str_sub(sampleID, 1, 7)) %>%
   dplyr::filter(pdid == curr_pdid) %>%
-  dplyr::mutate(mut_id = paste(chr, pos, ref, mut))
+  dplyr::mutate(mut_id = paste(chr, pos, ref, alt))
 geno %>%
   dplyr::inner_join(nanoseq_muts) %>%
   dplyr::filter(total_depth > 0) %>%

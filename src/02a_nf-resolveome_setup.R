@@ -5,15 +5,17 @@ library(magrittr)
 
 # dirs
 wd <- getwd()
+data_dir <- file.path(Sys.getenv("LUSTRE_STAGING"), "resolveome")
 out_dir <- file.path(wd, "out/nf-resolveome/muts_and_snps/")
 dir.create(out_dir, showWarnings = FALSE)
 
 # get clean cells only (and cells that have not yet been assessed)
+# (plate 10 cells are being reassessed for doublet status with the dna)
 clean_cell_ids <-
   system("ls data/manual_inspection/PD*.tsv", intern = TRUE) %>%
   purrr::map(readr::read_tsv) %>%
   dplyr::bind_rows() %>%
-  dplyr::filter(!suspected_doublet | is.na(suspected_doublet),
+  dplyr::filter(!suspected_doublet | is.na(suspected_doublet) | plate == 10,
                 !chr_dropout | is.na(chr_dropout)) %>%
   dplyr::pull(cell_id)
 
@@ -57,7 +59,8 @@ type_mutations <- function(df) {
 
 # get common snp sites
 common_snps <-
-  gzfile("/lustre/scratch125/casm/team268im/fa8/117/NOVASEQX_MASKS/NEW_MASKS_wNSX_OCT2024/GRCh37_WGNS/SNP_GRCh37.wgns.bed.gz") %>%
+  "../reference/nanoseq/genome_masks/GRCh37_WGNS/SNP_GRCh37.wgns.bed.gz" %>%
+  gzfile() %>%
   readr::read_tsv(col_names = c("#CHROM", "START", "POS")) %>%
   dplyr::select(`#CHROM`, POS)
 
@@ -82,23 +85,11 @@ caveman_snps <-
   dplyr::distinct() %>%
   split(.$donor_id)
 
-# get genes to genotype (those approaching gene-level significance in PD63118)
-genes_of_interest <-
-  readr::read_csv("data/nanoseq/PD63118/mutations2genotype_20250219.csv") %>%
-  # get unique mutations
-  dplyr::distinct() %>%
-  # annotate with dndscv
-  dplyr::transmute(sampleID = "PD63118", chr, pos, ref, mut = alt) %>%
-  dndscv::dndscv(max_muts_per_gene_per_sample = Inf,
-                 max_coding_muts_per_sample = Inf, outp = 1) %>%
-  {.$annotmuts$gene} %>%
-  unique()
-
 # get mutations
 nanoseq_muts <-
   readr::read_tsv("data/nanoseq/hashimoto_exome_targeted_combined_muts.tsv") %>%
-  dplyr::filter(gene %in% genes_of_interest) %>%
-  dplyr::transmute(chr, pos, ref, alt = mut, donor_id = substr(sampleID, 1, 7)) %>%
+  dplyr::transmute(chr, pos, ref, alt = mut,
+                   donor_id = substr(sampleID, 1, 7)) %>%
   dplyr::distinct() %>%
   split(.$donor_id)
 
@@ -106,13 +97,11 @@ nanoseq_muts <-
 purrr::walk2(names(nanoseq_muts), nanoseq_muts, function(donor_id_i, muts_i) {
   dir.create(file.path(out_dir, donor_id_i))
   muts_i %>%
-    readr::write_tsv(
-      file.path(out_dir, donor_id_i, "nanoseq_mutations.tsv"))
+    readr::write_tsv(file.path(out_dir, donor_id_i, "nanoseq_mutations.tsv"))
 })
 purrr::walk2(names(caveman_snps), caveman_snps, function(donor_id_i, snps_i) {
   snps_i %>%
-    readr::write_tsv(
-      file.path(out_dir, donor_id_i, "caveman_snps.tsv"))
+    readr::write_tsv(file.path(out_dir, donor_id_i, "caveman_snps.tsv"))
 })
 
 # write samplesheets
@@ -126,5 +115,6 @@ ss <-
   {split(., .$seq_type)}
 purrr::walk2(names(ss), ss, function(seq_type_i, ss_i) {
   ss_i %>%
-    readr::write_csv(file.path("out/nf-resolveome", seq_type_i, "samplesheet.csv"))
+    readr::write_csv(file.path("out/nf-resolveome", seq_type_i,
+                               "samplesheet.csv"))
 })
