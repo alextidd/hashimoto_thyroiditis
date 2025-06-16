@@ -4,7 +4,7 @@
 library(magrittr)
 
 # dirs
-data_dir <- file.path(Sys.getenv("LUSTRE_STAGING"), "resolveome")
+data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "resolveome/data/bams/")
 
 # hard-code the run_id-to-plate conversion
 # "49686" = 1
@@ -126,7 +126,9 @@ ss <-
     study_id = gsub("STDY.*", "", sanger_sample_id),
     donor_id = donor_id_required_for_ega,
     sanger_sample_id, supplier_sample_name, manifest_file,
-    bam)
+    bam) %>%
+  # filter out rna for now
+  dplyr::filter(seq_type != "rna")
 
 # write ss irods
 ss %>%
@@ -144,21 +146,3 @@ ss_local <-
 # write ss local
 ss_local %>%
   readr::write_csv(paste0(data_dir, "/samplesheet_local.csv"))
-
-# write samplesheet for testing (3 samples from each run)
-ss_local %>%
-  dplyr::group_by(seq_type, run_id, lane) %>%
-  dplyr::filter(dplyr::row_number() < 4) %>%
-  readr::write_csv("out/test/samplesheet.csv")
-
-# add pre pcr quants
-dnahyb_pre_pcr_quants <-
-  "data/plate_layout/2025-03-01_Hashimoto_PD63118_Plate10_PlateLayout_dnahyb_pre_pcr_quants.tsv" %>%
-  readr::read_tsv() %>%
-  tidyr::pivot_longer(cols = -`...1`, values_to = "DNA_PrePCR_conc") %>%
-  dplyr::transmute(well = paste0(`...1`, name), DNA_PrePCR_conc)
-rna_pre_pcr_quants <-
-  "data/plate_layout/2025-03-01_Hashimoto_PD63118_Plate10_PlateLayout_rna_pre_pcr_quants.tsv" %>%
-  readr::read_tsv() %>%
-  tidyr::pivot_longer(cols = -`...1`, values_to = "RNA_PrePCR_conc") %>%
-  dplyr::transmute(well = paste0(`...1`, name), RNA_PrePCR_conc)

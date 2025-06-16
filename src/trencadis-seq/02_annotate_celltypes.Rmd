@@ -1,5 +1,5 @@
 ---
-title: "Seurat analysis"
+title: "Celltype annotation"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 geometry: margin=1in
 fontfamily: mathpazo

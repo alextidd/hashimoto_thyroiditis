@@ -1,4 +1,3 @@
-
 # libraries
 library(magrittr)
 
@@ -10,7 +9,7 @@ df <-
   readr::read_tsv("data/vdj_coverage/ig_tcr_genes_pseudogenes.tsv") %>%
   janitor::clean_names() %>%
   dplyr::select(chr = chromosome_scaffold_name, start = gene_start_bp,
-                end = gene_end_bp, gene = gene_name, everything()) %>%
+                end = gene_end_bp, gene = gene_name, starts_with("gene_")) %>%
   dplyr::filter(chr %in% c("2", "7", "14", "22")) %>%
   dplyr::mutate(class = dplyr::case_when(grepl("^IG", gene) ~ "BCR",
                                          grepl("^TR", gene) ~ "TCR",

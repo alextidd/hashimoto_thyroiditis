@@ -4,9 +4,18 @@ library(GenomicRanges)
 library(rtracklayer)
 library(biomaRt)
 
+# dirs
+dir.create("out/twist")
+
 # load interval list
 intervals <-
   readr::read_csv("data/twist/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg19_gene_info.csv")
+
+# save as a bed
+intervals %>%
+  dplyr::transmute(chr, start = bed_start, end = bed_end) %>%
+  readr::write_tsv("out/twist/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg19.bed", 
+                   col_names = FALSE)
 
 # get gene strandedness
 mart <- useEnsembl("ensembl", dataset = "hsapiens_gene_ensembl")
@@ -27,7 +36,7 @@ hg38_intervals <-
     seqnames = paste0("chr", .$chr),
     ranges = IRanges(start = .$bed_start, end = .$bed_end),
     gene = .$gene, target_type = .$target_type)} %>%
-  liftOver(import.chain("../reference/liftOver/hg19ToHg38.over.chain")) %>%
+  liftOver(import.chain("../../reference/liftover/hg19ToHg38.over.chain")) %>%
   unlist() %>%
   tibble::as_tibble() %>%
   dplyr::select(seqnames, start, end, gene) %>%
@@ -43,7 +52,7 @@ hg38_intervals <-
 # coordinates are 1-based (first position in the genome is position 1, not
 # position 0).
 dict_header <-
-  "../reference/gatk/grch38/genome.dict" %>%
+  "/lustre/scratch124/casm/references/ref_tmp/Homo_sapiens/GRCh38_full_analysis_set_plus_decoy_hla/genome.fa.dict" %>%
   readr::read_lines()
 
 # save to picard interval_list format
@@ -57,4 +66,3 @@ hg38_intervals %>%
   dplyr::select(chr, start, end) %>%
   readr::write_tsv("out/twist/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg38.bed",
                    col_names = FALSE)
-

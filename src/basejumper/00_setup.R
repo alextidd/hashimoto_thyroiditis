@@ -6,18 +6,19 @@ library(purrr)
 library(dplyr)
 
 # dirs
-wd <- getwd()
-fastq_dir <- paste0(wd, "/out/bamtofastq/reads/")
-dir.create("out/bamtofastq/", showWarnings = FALSE)
+data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "resolveome/data/")
+fastq_dir <- file.path(data_dir, "/fastqs/reads")
 
 # read samplesheet
-ss <- readr::read_csv("data/resolveome/samplesheet_local.csv")
+ss <- readr::read_csv(file.path(data_dir, "bams/samplesheet_local.csv"))
 
 # write samplesheet for fastqs
 ss %>%
   dplyr::transmute(sample_id = id, mapped = bam, index = paste0(bam, ".bai"),
                    file_type = "bam") %>%
-  readr::write_csv("out/bamtofastq/samplesheet.csv")
+  #check if bam exists
+  dplyr::filter(file.exists(mapped)) %>%
+  readr::write_csv(file.path(data_dir, "fastqs/samplesheet.csv"))
 
 # read manual inspection results, get clean cell ids (include all of plate 10)
 clean_cell_ids <-

@@ -5,9 +5,9 @@ library(magrittr)
 
 # dirs
 wd <- getwd()
-data_dir <- file.path(Sys.getenv("LUSTRE_STAGING"), "resolveome")
+data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "resolveome/data/bams/")
 out_dir <- file.path(wd, "out/nf-resolveome/muts_and_snps/")
-dir.create(out_dir, showWarnings = FALSE)
+dir.create(out_dir, recursive = TRUE)
 
 # get clean cells only (and cells that have not yet been assessed)
 # (plate 10 cells are being reassessed for doublet status with the dna)
@@ -21,7 +21,7 @@ clean_cell_ids <-
 
 # samplesheet
 ss_bams <-
-  readr::read_csv("data/resolveome/samplesheet_local.csv") %>%
+  readr::read_csv(file.path(data_dir, "samplesheet_local.csv")) %>%
   dplyr::filter(seq_type %in% c("dna", "dnahyb"), cell_id %in% clean_cell_ids)
 
 # function: define mutation type based on ref and alt, split up mnvs and dnvs
@@ -59,7 +59,7 @@ type_mutations <- function(df) {
 
 # get common snp sites
 common_snps <-
-  "../reference/nanoseq/genome_masks/GRCh37_WGNS/SNP_GRCh37.wgns.bed.gz" %>%
+  "../../reference/nanoseq/genome_masks/GRCh37_WGNS/SNP_GRCh37.wgns.bed.gz" %>%
   gzfile() %>%
   readr::read_tsv(col_names = c("#CHROM", "START", "POS")) %>%
   dplyr::select(`#CHROM`, POS)
@@ -69,7 +69,7 @@ common_snps <-
 # 0.3 < VAF < 0.7 and DP > 50
 # PD63118b_lo0044 has the highest coverage at 68X according to picard
 caveman_snps <-
-  "/nfs/cancer_ref01/nst_links/live/3464/PD63118b_lo0044/PD63118b_lo0044.caveman_c.snps.vcf.gz" %>%
+  "/nfs/irods-cgp-sb01-sdf/intproj/3438/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz" %>%
   readr::read_tsv(comment = "##") %>%
   dplyr::mutate(
     DP = strsplit(INFO, ";") %>% purrr::map_chr(~ .x[grepl("^DP=", .x)]) %>%
@@ -114,6 +114,7 @@ ss <-
     snps = ifelse(file.exists(snps), snps, NA)) %>%
   {split(., .$seq_type)}
 purrr::walk2(names(ss), ss, function(seq_type_i, ss_i) {
+  dir.create(file.path("out/nf-resolveome", seq_type_i))
   ss_i %>%
     readr::write_csv(file.path("out/nf-resolveome", seq_type_i,
                                "samplesheet.csv"))

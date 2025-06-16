@@ -15,7 +15,7 @@ module load singularity/3.11.4
     --samplesheet samplesheet.csv \
     --outdir ./ \
     --location local \
-    --fasta $wd/data/gatk/grch38/genome.fa \
+    --fasta /lustre/scratch124/casm/references/ref_tmp/Homo_sapiens/GRCh38_full_analysis_set_plus_decoy_hla/genome.fa \
     --realign false \
     -w $LUSTRE_TEAM/resolveome/work/nf-gatk/ \
     -N at31@sanger.ac.uk \
