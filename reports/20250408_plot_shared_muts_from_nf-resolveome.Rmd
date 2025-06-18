@@ -43,7 +43,7 @@ We load the samplesheet and manual inspection results.
 
 ```{r load_ss}
 man_insp <-
-  readr::read_tsv("data/manual_inspection/PD63118.tsv") %>%
+  readr::read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
   # filter out bad cells
   filter((!chr_dropout | is.na(chr_dropout)) & (!suspected_doublet | is.na(suspected_doublet))) %>%
   select(-c(run_id, id, seq_type)) %>%

@@ -18,12 +18,18 @@ params:
 ```{r setup, include = F, message = F, warning = F, echo = F}
 # rmarkdown::render('reports/20250422_first_year_report_plots.Rmd', output_file = '20250422_first_year_report_plots.html', output_dir = 'reports')
 
+# donor
+donor_id_i <- "PD63118"
+
+# dirs
+out_dir <- paste0("out/nf-resolveome/reports/", donor_id_i, "/")
+
 # chunk options
 knitr::opts_knit$set(root.dir = "../")
 knitr::opts_chunk$set(warning = FALSE,
                       dpi = 300,
                       message = FALSE,
-                      cache.path = "reports/20250422_first_year_report_plots_cache/")
+                      cache.path = out_dir)
 ```
 
 ```{r libraries, include = F, message = F, warning = F, echo = F}
@@ -67,22 +73,23 @@ impact_colours <- c("Missense" = "#5f9fa0",
 # Samplesheet
 
 ```{r load_ss}
+# manual inspection results
 man_insp <-
-  read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
+  read_tsv(paste0("data/resolveome/manual_inspection/", donor_id_i, ".tsv")) %>%
   dplyr::select(-run_id) %>%
   # fix loh_1p
   mutate(loh_1p = as.character(as.numeric(loh_1p)),
          loh_9p = as.character(as.numeric(loh_9p)),
          loh_9q = as.character(as.numeric(loh_9q)))
+
+# samplesheet
 ss <-
   file.path(Sys.getenv("LUSTRE_TEAM"),
             "resolveome/data/bams/samplesheet_local.csv") %>%
   read_csv() %>%
   # add manual inspection data
   left_join(man_insp) %>%
-  filter(donor_id == "PD63118")
-driver_genes <-
-  readLines("../trencadis-seq/data/thyroid/driver_genes/driver_genes.txt")
+  filter(donor_id == donor_id_i)
 ```
 
 # Quality control
@@ -154,122 +161,6 @@ cts %>%
   labs(x = "VDJ + SHM + CSR celltype")
 ```
 
-## ImmuneLENS
-
-```{r il_annot}
-# immune lens annotations
-immunelens <-
-  "out/immunelens/scores.tsv" %>%
-  read_tsv() %>%
-  inner_join(ss_annot) %>%
-  transmute(cell_id, name = paste0("cell_frac_", gene), cell_fraction,
-            celltype_VDJ_SHM_CSR)
-
-# plot
-immunelens %>%
-  filter(name %in% c("cell_frac_TCRA", "cell_frac_IGH")) %>%
-  ggplot(aes(x = celltype_VDJ_SHM_CSR, y = cell_fraction, colour = celltype_VDJ_SHM_CSR)) +
-  geom_boxplot() +
-  geom_jitter(height = 0) +
-  facet_grid(~ name) +
-  scale_colour_manual(values = pal) +
-  theme_bw() +
-  theme(legend.position = "none", panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
-```
-
-## bj-expression
-
-```{r bje_annot}
-bje <-
-  "out/BaseJumper/bj-expression/rna/PD63118_run/tertiary_analyses/classification_cell_typing/df_cell_typing_summary_singler_hpca_gtex_tcga.tsv" %>%
-  read_tsv() %>%
-  dplyr::rename(id = SampleId) %>%
-  inner_join(ss_annot)
-
-bje %>% dplyr::count(Progenitor)
-
-bje %>% filter(celltype_VDJ_SHM_CSR == "other") %>% dplyr::count(Progenitor)
-
-bje %>%
-  mutate(celltype_bje = case_when(
-    Progenitor %in% c("B_cell", "T_cells", "NK_cell", "Macrophage", "Monocyte") ~ Progenitor,
-    TRUE ~ "other")) %>%
-  dplyr::count(celltype_VDJ_SHM_CSR, celltype_bje)
-```
-
-```{r ct_stats}
-ct_stats <-
-  cts %>% dplyr::count(celltype_VDJ_SHM_CSR) %>% {split(.$n, .$celltype_VDJ_SHM_CSR)}
-
-il_stats <-
-  immunelens %>%
-  mutate(
-    celltype = case_when(celltype_VDJ_SHM_CSR %in% c("activated B", "naive B") ~ "B",
-                         TRUE ~ celltype_VDJ_SHM_CSR)) %>%
-  group_by(celltype, name) %>%
-  summarise(mean = mean(cell_fraction, na.rm = TRUE),
-            max = max(cell_fraction, na.rm = TRUE),
-            min = min(cell_fraction, na.rm = TRUE)) %>%
-  mutate(stat = paste0(round(mean * 100), "% (", round(min * 100), "-",
-                       round(max * 100), "%)")) %>%
-  split(.$name) %>%
-  purrr::map(~ split(.x$stat, .x$celltype))
-
-bje_stats <-
-  bje %>%
-  left_join(cts) %>%
-  transmute(cell_id, Progenitor,
-            celltype_bje = case_when(Progenitor == "B_cell" ~ "B",
-                                     Progenitor == "T_cells" ~ "T",
-                                     TRUE ~ "other"),
-            celltype = case_when(celltype_VDJ_SHM_CSR %in% c("activated B", "naive B") ~ "B",
-                                 TRUE ~ celltype_VDJ_SHM_CSR),
-            lineage = ifelse(celltype == "other", "other", "B/T")) %>%
-  dplyr::count(lineage, celltype, celltype_bje)
-bje_stats %>% knitr::kable()
-
-bje_non_BT <-
-  bje %>%
-  left_join(cts) %>%
-  transmute(cell_id, Progenitor, celltype_VDJ_SHM_CSR) %>%
-  filter(celltype_VDJ_SHM_CSR == "other") %>%
-  group_by(Progenitor) %>%
-  summarise(n = n(), cell_ids = paste(cell_id, collapse = ",")) %>%
-  arrange(-n)
-bje_non_BT %>% knitr::kable()
-
-n_bt <- bje_stats %>% filter(lineage == "B/T") %>% pull(n) %>% sum()
-n_bt_correct <- bje_stats %>% filter(lineage == "B/T" & celltype == celltype_bje) %>% pull(n) %>% sum()
-n_other <- bje_stats %>% filter(lineage == "other") %>% pull(n) %>% sum()
-```
-
-Based on VDJ, SHM, and CSR annotations, 
-`r ct_stats[["activated B"]] + ct_stats[["naive B"]]` cells were B cells 
-(`r ct_stats[["activated B"]]` of which were activated), 
-`r ct_stats[["T"]]` were T cells, and `r ct_stats$other` were other celltypes. 
-
-`ImmuneLENS` scores for T cell fraction based on the TCRA locus strongly confirm 
-the T cell annotations with a mean of `r il_stats$cell_frac_TCRA$T`, versus a
-mean of `r il_stats$cell_frac_TCRA$B` for B cells.
-Mean ImmuneLENS scores based on the IGH were `r il_stats$cell_frac_IGH$B` for B
-cells and `r il_stats$cell_frac_IGH$T` for T cells. This correlated well with B
-cell annotation, although did not differentiate B and T cells as effectively, 
-with some overlap in ranges [see supplementary figure X]. 
-
-`bj-expression` automated labelling of the RNA data was compared to the
-DNA-based annotations and was found to perform quite sporadically. 
-`r n_bt_correct`/`r n_bt` B and T lymphocytes were annotated correctly.
-Among the `r n_other` cells that were not B or T cells according to the DNA
-data, there were 2 platelets, 1 macrophage, 1 monocyte, 1 NK cell, and 1 
-epithelial cell, which are plausible labels. However, two non-B/T cells were 
-labelled as osteoblasts, which is an unrealistic label. Nonetheless, most of
-these automated labels show consensus with the DNA-based annotations.
-
-Final celltypes were assigned using the outcomes of the VDJ, SHM, and CSR
-inspections, which were largely supported by the `ImmuneLENS` and
-`bj-expression` results.
-
 # Sequencing metrics
 
 We load the DNA sequencing coverage.
@@ -280,7 +171,7 @@ mosdepth <-
   ss_annot %>%
   transmute(
     seq_type, donor_id, id,
-    out_dir = file.path("out/nf-resolveome", seq_type, donor_id, id),
+    out_dir = file.path("out/nf-resolveome", seq_type, donor_id, "cells", id),
     summary_txt = paste0(out_dir, "/mosdepth/", id, ".mosdepth.summary.txt"),
     dist = paste0(out_dir, "/mosdepth/", id, ".mosdepth.",
                   ifelse(seq_type == "dna", "global", "region"),
@@ -321,29 +212,6 @@ perc_cov <-
   transmute(id, name = "% genome covered", value = 100 * prop)
 ```
 
-We load the RNA sequencing counts and features.
-
-```{r read_and_gene_counts}
-# dirs
-bje_dir <- "out/BaseJumper/bj-expression/rna/PD63118_run/"
-
-# load gene counts
-gene_counts <-
-  file.path(bje_dir, "secondary_analyses/quantification_salmon/df_gene_counts_salmon.tsv") %>%
-  read_tsv() %>%
-  mutate(id = gsub("salmon_outdir_", "", File)) %>%
-  group_by(id) %>%
-  summarise(value = n_distinct(gene_symbol_gene_id), name = "n genes")
-
-# get read counts
-read_counts <-
-  file.path(bje_dir, "secondary_analyses/quantification_salmon/df_gene_counts_salmon.tsv") %>%
-  read_tsv() %>%
-  mutate(id = gsub("salmon_outdir_", "", File)) %>%
-  group_by(id) %>%
-  summarise(value = sum(countsFromAbundanceNo), name = "n counts")
-```
-
 We plot the coverage distribution.
 
 ```{r plot_coverage_dist}
@@ -367,12 +235,15 @@ snps <-
       c("dna", "dnahyb") %>%
       purrr::set_names() %>%
       purrr::map(~
-        read_tsv(file.path("out/nf-resolveome", .x,
-                 "PD63118/genotyping/snps/PD63118_genotyped_snps.tsv"))) %>%
+        read_tsv(paste0("out/nf-resolveome/", .x, "/", donor_id_i,
+                        "/genotyping/snps/", donor_id_i,
+                        "_genotyped_snps.tsv"))) %>%
       bind_rows(.id = "seq_type") %>%
       group_by(seq_type)
     snps
   }, file = "snps.rds", rerun = params$rerun)
+
+
 
 # get binned vafs and depths
 p_snps_dat <-
@@ -388,7 +259,7 @@ p_snps_dat <-
     mut_vaf_high = as.numeric(stringr::str_extract(mut_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
     mut_vaf_mid = (mut_vaf_min + mut_vaf_high) / 2) %>%
   dplyr::count(mut_vaf_bin, mut_vaf_mid, total_depth_bin)
-saveRDS(p_snps_dat, "reports/20250422_first_year_report_plots_cache/p_snps_dat.rds")
+saveRDS(p_snps_dat, paste0(out_dir, "/report_cache/p_snps_dat.rds"))
 
 # calculate allelic statuses
 allelic_statuses <-
@@ -401,12 +272,12 @@ allelic_statuses <-
   dplyr::count(id, allelic_status) %>%
   group_by(seq_type, id) %>%
   mutate(n_snps = sum(n), prop = n / n_snps)
-saveRDS(allelic_statuses, "reports/20250422_first_year_report_plots_cache/allelic_statuses.rds")
+saveRDS(allelic_statuses, paste0(out_dir, "/report_cache/allelic_statuses.rds"))
 ```
 
 ```{r plot_allelic_vaf_dist, fig.height = 8}
 p_snps_dat <-
-  readRDS("reports/20250422_first_year_report_plots_cache/p_snps_dat.rds")
+  readRDS(paste0(out_dir, "/report_cache/p_snps_dat.rds"))
 p_snps_dat %>%
   ggplot(aes(x = mut_vaf_mid, y = n, fill = total_depth_bin)) +
   geom_col() +
@@ -423,7 +294,7 @@ We plot the proportion of allelic dropout per cell.
 ```{r plot_allelic_dropout, fig.width = 10}
 # get prop allelic dropout
 allelic_statuses <-
-  readRDS("reports/20250422_first_year_report_plots_cache/allelic_statuses.rds")
+  readRDS(paste0(out_dir, "/report_cache/allelic_statuses.rds"))
 allelic_dropout <-
   allelic_statuses %>%
   filter(allelic_status %in% c("one", "neither")) %>%
@@ -453,7 +324,7 @@ We plot the sequencing metrics.
 
 ```{r plot_coverage, fig.height = 10, fig.width = 15}
 p_cov_dat <-
-  bind_rows(read_counts, gene_counts, cov, perc_cov, allelic_dropout) %>%
+  bind_rows(cov, perc_cov, allelic_dropout) %>%
   inner_join(ss_annot) %>%
   mutate(name = case_when(seq_type == "dnahyb" & name == "% genome covered" ~ "% panel covered",
                           TRUE ~ name)) %>%
@@ -666,72 +537,6 @@ genos <-
 genos
 ```
 
-We plot the distribution of genotyped mutations from NanoSeq across the genes.
-
-```{r plot_genos, fig.height = 2, fig.width = 9}
-load("../reference/dndscv/refcds_hg19.rda")
-
-# plot CDS mutations in drivers
-driver_genes %>%
-  purrr::map(function(gene_i) {
-
-    # get ccds
-    g <- RefCDS[[which(purrr::map_lgl(RefCDS, ~ .x$gene_name == gene_i))]]
-    ccds <-
-      tibble::tibble(chr = g$chr,
-                     start = g$intervals_cds[, 1],
-                     end = g$intervals_cds[, 2]) %>%
-      mutate(cds_interval = row_number()) %>%
-      group_by(chr, start, end, cds_interval) %>%
-      reframe(pos = start:end) %>%
-      arrange(chr, pos) %>%
-      mutate(aa = (row_number() - 1) %/% 3 + 1,
-             cds_boundary = cds_interval != lag(cds_interval) | row_number() == 1,
-             cds_end = row_number() == n(),
-             aa_boundary = case_when(cds_boundary ~ aa - 0.5,
-                                     cds_end ~ aa + 0.5,
-                                     TRUE ~ NA))
-
-    # plot
-    p_muts <-
-      genos %>%
-      filter(gene == gene_i) %>%
-      distinct(chr, pos, ref, alt, gene, strand, ref_cod, mut_cod, ref3_cod,
-               mut3_cod, impact, ntchange, codonsub, pid, type) %>%
-      mutate(impact = ifelse(impact == "no-SNV" & type %in% c("ins", "del"),
-                             "Indels", impact))
-    p_dat <-
-      p_muts %>%
-      right_join(ccds) %>%
-      dplyr::count(chr, pos, ref, alt, impact, aa, aa_boundary)
-
-    # stats
-    n_muts <- format(nrow(p_muts), big.mark = ",", scientific = FALSE)
-    n_cds_muts <-
-      p_dat %>%
-      filter(!is.na(impact)) %>%
-      nrow() %>%
-      format(big.mark = ",", scientific = FALSE)
-
-    # plot
-    p_dat %>%
-      ggplot(aes(x = aa, y = n, fill = impact)) +
-      geom_vline(aes(xintercept = aa_boundary), colour = "grey") +
-      geom_col(data = p_dat %>% filter(!is.na(impact)), width = 1,
-               position = "stack") +
-      scale_fill_manual(values = impact_colours) +
-      theme_classic() +
-      theme(panel.grid.major.x = element_blank(),
-            panel.grid.minor.x = element_blank(),
-            axis.line.y = element_blank()) +
-      scale_y_continuous(expand = c(0, 0)) +
-      scale_x_continuous(expand = c(0, 0)) +
-      labs(title = paste0(gene_i, " CDS mutations (1 aa bins, n = ", n_muts,
-                          ", n in CDS = ", n_cds_muts, ")"))
-
-  })
-```
-
 We filter to `mut_vaf` > 0.2 and `mut_depth` > 1.
 
 ```{r genos_filter}
@@ -750,9 +555,11 @@ ss_annot %>%
       distinct()) %>%
   mutate(TNFRSF14_mut = ifelse(is.na(TNFRSF14_mut), FALSE, TRUE)) %>%
   distinct(cell_id, celltype_VDJ_SHM_CSR, TNFRSF14_mut) %>%
-  readr::write_tsv("out/analysis/PD63118_TNFRSF14_mut_status.tsv")
+  readr::write_tsv(paste0("out/analysis/", donor_id_i,
+                          "_TNFRSF14_mut_status.tsv"))
 genos_filter %>%
-  readr::write_tsv("out/analysis/PD63118_filtered_genotyped_mutations.tsv")
+  readr::write_tsv("out/analysis/", donor_id_i,
+                   "_filtered_genotyped_mutations.tsv")
 
 # return
 genos_filter
@@ -1057,9 +864,11 @@ bj_muts_per_seq_type <- xfun::cache_rds({
       # get nr and nv
       c("mut_depth" = "NV", "total_depth" = "NR") %>%
         purrr::map(function(i) {
-          paste0("out/BaseJumper/bj-somatic-variantcalling/", seq_type,
-                "/PD63118_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA", 
-                "/Sequoia_group_PD63118_bino-10_rhosnp0.4_rhoindel0.4_mincov10_maxcov500_both_",
+          paste0("out/BaseJumper/bj-somatic-variantcalling/", seq_type, "/",
+                 donor_id_i,
+                 "_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA", 
+                "/Sequoia_group_", donor_id_i,
+                "_bino-10_rhosnp0.4_rhoindel0.4_mincov10_maxcov500_both_",
                 i, "_filtered_all.txt") %>%
             read.table() %>%
             tibble::rownames_to_column(var = "mut_id")
@@ -1390,9 +1199,11 @@ tree <-
   purrr::map(function(seq_type) {
     # read tree
     tree <-
-      file.path("out/BaseJumper/bj-somatic-variantcalling/", seq_type,
-              "/PD63118_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA/") %>%
-      list.files(pattern = "_both_tree_with_branch_length.tree", full.names = TRUE) %>%
+      paste0("out/BaseJumper/bj-somatic-variantcalling/", seq_type, "/",
+             donor_id_i,
+             "_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA/") %>%
+      list.files(pattern = "_both_tree_with_branch_length.tree",
+                 full.names = TRUE) %>%
       ape::read.tree()
 
     # subset cells
@@ -1466,251 +1277,3 @@ plot_tree(tree$dna)
 ```{r plot_dnahyb_tree, fig.height = 15, fig.width = 10}
 plot_tree(tree$dnahyb)
 ```
-
-# Differential gene expression analysis
-
-```{r expr_mat}
-# get cells and their tnfrsf14 status
-cells <-
-  ss_annot %>%
-  distinct(cell_id, celltype_VDJ_SHM_CSR, loh_1p) %>%
-  left_join(
-    genos_filter %>%
-      filter(gene == "TNFRSF14", !impact %in% c("Synonymous", "Non-coding")) %>%
-      distinct(cell_id) %>%
-      mutate(TNFRSF14_mut = TRUE)) %>%
-  mutate(sample_id = cell_id,
-         condition = factor(as.numeric(!is.na(TNFRSF14_mut)),
-                            levels = c("0", "1"))) %>%
-  filter(celltype_VDJ_SHM_CSR == "activated B")
-
-# get expression in those cells
-expr <-
-  "out/BaseJumper/bj-expression/rna/PD63118_run/secondary_analyses/quantification_htseq/matrix_gene_counts_starhtseq.txt" %>%
-  readr::read_tsv() %>%
-  tidyr::separate_wider_delim(cols = "gene_id_gene_symbol", delim = "_",
-                              names = c("gene_id", "gene_symbol")) %>%
-  rename_with(~ stringr::str_replace(., "_rna_.*", ""))
-expr_counts <-
-  expr %>%
-  dplyr::select(gene_id, gene_symbol, any_of(cells$sample_id)) %>%
-  column_to_rownames(var = "gene_id") %>%
-  dplyr::select(-gene_symbol)
-
-# ensure order of sample IDs matches
-cells <-
-  cells %>%
-  filter(sample_id %in% colnames(expr_counts)) %>%
-  arrange(match(sample_id, colnames(expr_counts)))
-
-# convert to a DESeq2-compatible format
-dds <-
-  DESeqDataSetFromMatrix(countData = as.matrix(expr_counts),
-                         colData = cells, design = ~ condition)
-dds$condition <- relevel(dds$condition, ref = "0")
-
-# run DESeq2 normalization and differential expression analysis
-dds <- DESeq(dds)
-
-# to visualize normalized counts for a specific gene
-normalised_counts <- counts(dds, normalized = TRUE)
-
-# extract results
-res <-
-  results(dds, contrast = c("condition", "1", "0")) %>%
-  as_tibble(rownames = "gene") %>%
-  arrange(padj) %>%
-  left_join(expr %>% dplyr::select(gene = gene_id, gene_symbol)) %>%
-  mutate(direction = ifelse(log2FoldChange > 0, "upregulated", "downregulated"))
-significant_genes <-
-  res %>%
-  filter(padj < 0.05)
-print(significant_genes)
-```
-
-```{r volcano, fig.height = 7, fig.width = 10}
-# plot volcano
-labs <-
-  res %>%
-  group_by(direction) %>%
-  top_n(10, wt = -log10(padj))
-res %>%
-  filter(!is.na(padj)) %>%
-  mutate(sig_dir = case_when(padj < 0.05 & direction == "upregulated" ~ "upregulated",
-                             padj < 0.05 & direction == "downregulated" ~ "downregulated",
-                             TRUE ~ "not significant")) %>%
-  ggplot(aes(x = log2FoldChange, y = -log10(padj))) +
-  geom_point(aes(color = sig_dir, shape = padj < 0.05), alpha = 0.6) +
-  ggrepel::geom_text_repel(data = labs, aes(label = gene_symbol), size = 3,
-                           vjust = -0.5) +
-  scale_color_manual(values = c("upregulated" = "darkred",
-                                "downregulated" = "darkblue",
-                                "not significant" = "black")) +
-  scale_shape_manual(values = c(1, 19)) +
-  theme_minimal() +
-  labs(title = "Differentially expressed genes",
-       subtitle = "TNFRSF14 mutant vs WT activated B cells",
-       x = "log2 fold change",
-       y = "-log10 adjusted p-value")
-```
-
-```{r heatmap, fig.height = 12, fig.width = 10}
-# plot heatmap
-# Get top 50 differentially expressed genes
-top_genes <-
-  significant_genes %>%
-  group_by(direction) %>%
-  top_n(50, wt = -log10(padj)) %>%
-  {split(., .$direction)}
-
-# function: plot heatmap
-plot_heatmap <- function(top_genes_i, counts_i, p_title = "Top 50 DGEs",
-                         annotations = c()) {
-  # Extract their expression data
-  expr_top <- expr_counts[top_genes_i$gene, arrange(cells, condition)$sample_id]
-  rownames(expr_top) <- top_genes_i$gene_symbol
-
-  # Create a column annotation for TNFRSF14 status
-  annotation_col <-
-    cells %>%
-    transmute(condition = factor(condition), celltype_VDJ_SHM_CSR, sample_id, loh_1p) %>%
-    tibble::column_to_rownames(var = "sample_id")
-
-  # Define color scheme
-  ann_colors <- list(condition = c("0" = "blue", "1" = "red"))
-
-  # Scale and visualize heatmap
-  pheatmap::pheatmap(log2(expr_top + 1),
-           scale = "row", cluster_cols = FALSE,
-           clustering_distance_rows = "correlation",
-           annotation_col = annotation_col,
-           annotation_colors = ann_colors,
-           main = p_title)
-}
-
-# plot up/downregulated genes
-plot_heatmap(top_genes$upregulated, expr_counts, p_title = "Top 50 upregulated DEGs")
-plot_heatmap(top_genes$downregulated, expr_counts, p_title = "Top 50 downregulated DEGs")
-```
-
-```{r dgea_stats}
-dgea_counts <-
-  cells %>% dplyr::count(condition) %>% {split(.$n, .$condition)}
-updown_counts <-
-  significant_genes %>% dplyr::count(direction) %>% {split(.$n, .$direction)}
-```
-
-Differential gene expression analysis was performed between TNFRSF14-mutant 
-(n = `r dgea_counts[["1"]]`) and wildtype (n = `r dgea_counts[["0"]]`) activated
-B cells. `r updown_counts$upregulated` genes were significantly upregulated and
-`r updown_counts$downregulated` were significantly downregulated [see figure X].
-
-# Pathway enrichment analysis
-
-Run pathway enrichment analysis on the cells.
-
-```{r path_enrich}
-# function: run GO and KEGG pathway enrichment on a list of genes
-run_pathway_enrichment <- function(genes) {
-  # map Ensembl to Entrez IDs for enrichment
-  sig_entrez <-
-    genes %>%
-    tools::file_path_sans_ext() %>%
-    bitr(fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = org.Hs.eg.db) %>%
-    left_join(
-      significant_genes %>% transmute(ENSEMBL = tools::file_path_sans_ext(gene),
-                                      gene_symbol = gene_symbol))
-
-  # run GO enrichment
-  ego <- enrichGO(gene = sig_entrez$ENTREZID,
-                  OrgDb = org.Hs.eg.db,
-                  keyType = "ENTREZID",
-                  ont = "BP",
-                  pAdjustMethod = "BH",
-                  pvalueCutoff = 0.05,
-                  qvalueCutoff = 0.1)
-
-  # run KEGG enrichment
-  ekegg <- enrichKEGG(gene = sig_entrez$ENTREZID,
-                      organism = "hsa",
-                      pvalueCutoff = 0.05)
-
-  # return
-  list(ego = ego, ekegg = ekegg)
-}
-
-# run for upreg and downreg
-pe_upreg <-
-  significant_genes %>%
-  filter(log2FoldChange > 1) %>%
-  pull(gene) %>%
-  run_pathway_enrichment()
-pe_downreg <-
-  significant_genes %>%
-  filter(log2FoldChange < -1) %>%
-  pull(gene) %>%
-  run_pathway_enrichment()
-```
-
-```{r plot_up_pathway_enrich, fig.height = 7}
-# visualize top results
-p1 <- barplot(pe_upreg$ego, showCategory = 10, title = "GO Biological Process Enrichment of upregulated genes")
-p2 <- barplot(pe_downreg$ego, showCategory = 10, title = "GO Biological Process Enrichment of downregulated genes")
-(p1 / p2) + plot_layout(heights = c(1, 10), guides = "collect")
-```
-
-```{r pathway_genes}
-# map Ensembl to Entrez IDs for enrichment
-sig_entrez <-
-  significant_genes$gene %>%
-  tools::file_path_sans_ext() %>%
-  bitr(fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = org.Hs.eg.db) %>%
-  left_join(
-    significant_genes %>% transmute(ENSEMBL = tools::file_path_sans_ext(gene),
-                                    gene_symbol = gene_symbol))
-
-# upreg genes involved from GO output
-pe_upreg$ego@result %>%
-  dplyr::rename(ENTREZID = geneID) %>%
-  filter(p.adjust < 0.05) %>%
-  tidyr::separate_longer_delim(ENTREZID, delim = "/") %>%
-  left_join(sig_entrez) %>%
-  group_by(Description, GeneRatio, FoldEnrichment, p.adjust) %>%
-  summarise(genes = paste(gene_symbol, collapse = ", ")) %>%
-  knitr::kable()
-
-# downreg genes involved from GO output
-pe_downreg$ego@result %>%
-  dplyr::rename(ENTREZID = geneID) %>%
-  filter(p.adjust < 0.05) %>%
-  tidyr::separate_longer_delim(ENTREZID, delim = "/") %>%
-  left_join(sig_entrez) %>%
-  group_by(Description, GeneRatio, FoldEnrichment, p.adjust) %>%
-  summarise(genes = paste(gene_symbol, collapse = ", ")) %>%
-  knitr::kable()
-
-# upreg genes involved from KEGG output
-pe_upreg$ekegg@result %>%
-  dplyr::rename(ENTREZID = geneID) %>%
-  filter(p.adjust < 0.05) %>%
-  tidyr::separate_longer_delim(ENTREZID, delim = "/") %>%
-  left_join(sig_entrez) %>%
-  group_by(Description, GeneRatio, FoldEnrichment, p.adjust) %>%
-  summarise(genes = paste(gene_symbol, collapse = ", ")) %>%
-  knitr::kable()
-
-# downreg genes involved from KEGG output
-pe_downreg$ekegg@result %>%
-  dplyr::rename(ENTREZID = geneID) %>%
-  filter(p.adjust < 0.05) %>%
-  tidyr::separate_longer_delim(ENTREZID, delim = "/") %>%
-  left_join(sig_entrez) %>%
-  group_by(Description, GeneRatio, FoldEnrichment, p.adjust) %>%
-  summarise(genes = paste(gene_symbol, collapse = ", ")) %>%
-  knitr::kable()
-```
-
-```{r pathway_stats}
-pe_upreg$ego
-pe_downreg$ego
-``` 

@@ -22,7 +22,7 @@ ss %>%
 
 # read manual inspection results, get clean cell ids (include all of plate 10)
 clean_cell_ids <-
-  system("ls data/manual_inspection/PD*.tsv", intern = TRUE) %>%
+  system("ls data/resolveome/manual_inspection/PD*.tsv", intern = TRUE) %>%
   map(readr::read_tsv) %>%
   bind_rows() %>%
   filter(!suspected_doublet | is.na(suspected_doublet),

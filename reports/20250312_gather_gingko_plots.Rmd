@@ -28,7 +28,7 @@ knitr::opts_knit$set(root.dir = "../")
 
 ```{r}
 # get metadata
-man_insp <- readr::read_tsv("data/manual_inspection/PD63118.tsv")
+man_insp <- readr::read_tsv("data/resolveome/manual_inspection/PD63118.tsv")
 
 # define the directory and pattern for JPEG files
 wd <- getwd()

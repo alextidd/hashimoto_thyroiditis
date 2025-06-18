@@ -152,7 +152,7 @@ We load the samplesheet.
 
 ```{r load_data}
 man_insp <-
-  readr::read_tsv("data/manual_inspection/PD63118.tsv") %>%
+  readr::read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
   dplyr::mutate(run_id = as.character(run_id))
 metadata <-
   readr::read_csv("data/resolveome/samplesheet_local.csv") %>%

@@ -23,9 +23,9 @@ output:
 ---
 
 ```{r initialise, include = F}
-# out_dir <- "out/thyroid/seurat/min_3_cells_min_1000_genes/" ; rmarkdown::render("src/04a_thyroid_nf-trencadis-seq_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 1000, out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
-# out_dir <- "out/thyroid/seurat/min_3_cells_min_200_genes/" ; rmarkdown::render("src/04a_thyroid_nf-trencadis-seq_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 500, celltypes = paste0(out_dir, "celltypes.tsv"), out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
-# out_dir <- "out/thyroid/seurat/min_3_cells_min_500_genes/" ; rmarkdown::render("src/04a_thyroid_nf-trencadis-seq_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 500, celltypes = paste0(out_dir, "celltypes.tsv"), out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
+# out_dir <- "out/trencadis-seq/seurat/min_3_cells_min_1000_genes/" ; rmarkdown::render("src/trencadis-seq/02_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 1000, out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
+# out_dir <- "out/trencadis-seq/seurat/min_3_cells_min_200_genes/" ; rmarkdown::render("src/trencadis-seq/02_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 500, celltypes = paste0(out_dir, "cluster_summary_annotated.tsv"), out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
+# out_dir <- "out/trencadis-seq/seurat/min_3_cells_min_500_genes/" ; rmarkdown::render("src/trencadis-seq/02_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 500, celltypes = paste0(out_dir, "cluster_summary_annotated.tsv"), out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
 
 # libraries
 library(magrittr)
@@ -33,6 +33,7 @@ library(Seurat)
 library(SingleR)
 library(ggalluvial)
 library(ggplot2)
+library(Matrix)
 
 # set seed for reproducibility
 set.seed(42)
@@ -43,7 +44,7 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ggplot2::theme_update(legend.text = ggplot2::element_text(size = 7))
 
 # knitr options
-knitr::opts_knit$set(root.dir = "../")
+knitr::opts_knit$set(root.dir = "../..")
 knitr::opts_chunk$set(
   warning = FALSE, dpi = 300, message = FALSE,
   fig.align = "center",
@@ -57,9 +58,15 @@ First we load the `h5` object and convert it to a `Seurat` object.
 ```{r load_seu}
 seu <-
   xfun::cache_rds({
+    # load h5 object
     h5 <-
-      "data/thyroid/cellranger/49200_7613STDY14897605_filtered_feature_bc_matrix.h5" %>%
+      "data/trencadis-seq/cellranger/49200_7613STDY14897605_filtered_feature_bc_matrix.h5" %>%
       Read10X_h5()
+
+    # convert to matrix csv and save
+    write.csv(as.matrix(h5), file = "out/trencadis-seq/celltypist/matrix.csv")
+
+    # convert to seurat object
     seu <-
       CreateSeuratObject(counts = h5, min.cells = params$min_cells, min.features = params$min_features)
     seu
@@ -279,7 +286,7 @@ markers across the clusters.
 
 ```{r thyroid_markers, fig.height = 10}
 thy_markers <-
-  "data/thyroid/celltype_annotations/massalha2024_thyroid_celltype_markers.tsv" %>%
+  "data/trencadis-seq/celltype_annotations/massalha2024_thyroid_celltype_markers.tsv" %>%
   readr::read_tsv()
 
 # add a module score for each of the marker sets
@@ -345,14 +352,14 @@ seu <-
   xfun::cache_rds({
     # get high level labels from the encyclopedia
     ct_labels <-
-      "../reference/celltypist/Basic_celltype_information.tsv" %>%
+      "../../reference/celltypist/Basic_celltype_information.tsv" %>%
       readr::read_tsv() %>%
       janitor::clean_names() %>%
       dplyr::mutate(predicted_labels = low_hierarchy_cell_types)
 
     # get annots
     ct_annots <-
-      "out/thyroid/celltypist/celltype_annotations.csv" %>%
+      "out/trencadis-seq/celltypist/predicted_labels.csv" %>%
       readr::read_csv() %>%
       dplyr::rename(barcode = `...1`) %>%
       dplyr::left_join(ct_labels)
@@ -544,7 +551,7 @@ ct_annot_summ <-
 
 # write to tsv
 ct_annot_summ %>%
-  readr::write_tsv(paste0(params$out_dir, "cluster_annotation_summary.tsv"))
+  readr::write_tsv(paste0(params$out_dir, "cluster_summary.tsv"))
 
 knitr::kable(ct_annot_summ)
 ```
@@ -587,4 +594,7 @@ seu@meta.data %>%
   labs(x = "celltype") +
   theme_classic() +
   theme(legend.position = "none")
+
+# save final barcodes
+writeLines(colnames(seu), paste0(params$out_dir, "annotated_cell_barcodes.txt"))
 ```

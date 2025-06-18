@@ -14,7 +14,7 @@ data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "resolveome/data/bams/")
 
 # read in manifests
 manifests <-
-  list.files("data/manifest/", pattern = ".xlsx$", full.names = TRUE) %>%
+  list.files("data/resolveome/manifest/", pattern = ".xlsx$", full.names = TRUE) %>%
   {setNames(., basename(.) %>% tools::file_path_sans_ext())} %>%
   purrr::map(function(file) {
     file %>%
@@ -60,12 +60,12 @@ manifests[["7761stdy_manifest_26014_211124_Hyb"]] <-
 # assigned to PD63118_RNA_G10. i will fix this by assigning 7894STDY15290420 to
 # PD63118_RNA_G10. add plate number to supplier sample name.
 pre_pcr_quants <-
-  "data/plate_layout/2024-11-13_Hashimoto_PD63118_Plate3_PlateLayout_dna_pre_pcr_quants.tsv" %>%
+  "data/resolveome/plate_layout/2024-11-13_Hashimoto_PD63118_Plate3_PlateLayout_dna_pre_pcr_quants.tsv" %>%
   readr::read_tsv() %>%
   tidyr::pivot_longer(cols = -`...1`, values_to = "well_quant") %>%
   dplyr::mutate(well = paste0(`...1`, name))
 plate_layout <-
-  "data/plate_layout/2024-11-13_Hashimoto_PD63118_Plate3_PlateLayout_plate_layout.tsv" %>%
+  "data/resolveome/plate_layout/2024-11-13_Hashimoto_PD63118_Plate3_PlateLayout_plate_layout.tsv" %>%
   readr::read_tsv() %>%
   tidyr::pivot_longer(cols = -`...1`, values_to = "well_content") %>%
   dplyr::mutate(well = paste0(`...1`, name))
@@ -90,7 +90,7 @@ manifest <-
 
 # read in sequencescape pool files
 seqscape <-
-  list.files("data/sequencescape/", pattern = "tsv$", full.names = TRUE) %>%
+  list.files("data/resolveome/sequencescape/", pattern = "tsv$", full.names = TRUE) %>%
   {purrr::set_names(., basename(.) %>% tools::file_path_sans_ext())} %>%
   purrr::map(readr::read_tsv) %>%
   dplyr::bind_rows(.id = "id") %>%

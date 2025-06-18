@@ -12,7 +12,7 @@ dir.create(out_dir, recursive = TRUE)
 # get clean cells only (and cells that have not yet been assessed)
 # (plate 10 cells are being reassessed for doublet status with the dna)
 clean_cell_ids <-
-  system("ls data/manual_inspection/PD*.tsv", intern = TRUE) %>%
+  system("ls data/resolveome/manual_inspection/PD*.tsv", intern = TRUE) %>%
   purrr::map(readr::read_tsv) %>%
   dplyr::bind_rows() %>%
   dplyr::filter(!suspected_doublet | is.na(suspected_doublet) | plate == 10,
@@ -69,13 +69,13 @@ common_snps <-
 # 0.3 < VAF < 0.7 and DP > 50
 # PD63118b_lo0044 has the highest coverage at 68X according to picard
 caveman_snps <-
-  "/nfs/irods-cgp-sb01-sdf/intproj/3438/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz" %>%
+  "/nfs/irods-cgp-sr12-sdc/intproj/3464/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz" %>%
   readr::read_tsv(comment = "##") %>%
   dplyr::mutate(
     DP = strsplit(INFO, ";") %>% purrr::map_chr(~ .x[grepl("^DP=", .x)]) %>%
       strsplit("=") %>% purrr::map_chr(~ .x[2]) %>% as.integer(),
     VAF = gsub(".*:", "", TUMOUR) %>% as.numeric()) %>%
-  dplyr::filter(DP > 50, 0.3 < VAF, VAF < 0.7) %>%
+  dplyr::filter(DP > 50, VAF > 0.3, VAF < 0.7) %>%
   # get those at common snp sites
   dplyr::inner_join(common_snps) %>%
   dplyr::transmute(donor_id = "PD63118", chr = `#CHROM`, pos = POS, ref = REF,
@@ -102,6 +102,11 @@ purrr::walk2(names(nanoseq_muts), nanoseq_muts, function(donor_id_i, muts_i) {
 purrr::walk2(names(caveman_snps), caveman_snps, function(donor_id_i, snps_i) {
   snps_i %>%
     readr::write_tsv(file.path(out_dir, donor_id_i, "caveman_snps.tsv"))
+  snps_i %>%
+    dplyr::ungroup() %>%
+    dplyr::select(chr, pos) %>%
+    readr::write_tsv(file.path(out_dir, donor_id_i, "caveman_snps_positions.tsv"),
+                     col_names = FALSE)
 })
 
 # write samplesheets
