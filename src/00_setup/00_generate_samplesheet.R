@@ -97,10 +97,20 @@ seqscape <-
   janitor::clean_names() %>%
   tidyr::separate_wider_delim("id", delim = "_", names = c("run_id", "lane"))
 
+# get clean cells only (and cells that have not yet been assessed)
+# (plate 10 cells are being reassessed for doublet status with the dna)
+clean_cell_ids <-
+  system("ls data/resolveome/manual_inspection/PD*.tsv", intern = TRUE) %>%
+  purrr::map(readr::read_tsv) %>%
+  dplyr::bind_rows() %>%
+  dplyr::filter(!suspected_doublet | is.na(suspected_doublet) | plate == 10,
+                !chr_dropout | is.na(chr_dropout)) %>%
+  dplyr::pull(cell_id)
+
 # ss irods - combine manifest and sequencescape
 # generate cell_id - plate{plate}_well{well}
 # generate id      - plate{plate}_well{well}_{seq_type}_run{run_id}
-ss <-
+ss_irods <-
   dplyr::inner_join(manifest, seqscape) %>%
   tidyr::separate_wider_delim("supplier_sample_name", delim = "_",
                               names = c("pdid", "plate", "seq_type", "well"),
@@ -127,16 +137,16 @@ ss <-
     donor_id = donor_id_required_for_ega,
     sanger_sample_id, supplier_sample_name, manifest_file,
     bam) %>%
-  # filter out rna for now
-  dplyr::filter(seq_type != "rna")
+  # filter out rna and low quality cells
+  dplyr::filter(seq_type != "rna", cell_id %in% clean_cell_ids)
 
 # write ss irods
-ss %>%
+ss_irods %>%
   readr::write_csv(paste0(data_dir, "/samplesheet_irods.csv"))
 
 # ss local (with merged RNA BAMs collapsed)
 ss_local <-
-  ss %>%
+  ss_irods %>%
   dplyr::mutate(bam = paste0(data_dir, "/", donor_id, "/", id, "/bam/", id,
                              ".bam")) %>%
   dplyr::group_by(id) %>%

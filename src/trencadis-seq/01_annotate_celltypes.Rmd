@@ -596,5 +596,10 @@ seu@meta.data %>%
   theme(legend.position = "none")
 
 # save final barcodes
-writeLines(colnames(seu), paste0(params$out_dir, "annotated_cell_barcodes.txt"))
+writeLines(colnames(seu), paste0(params$out_dir, "annotated_cell_barcodes_10X.txt"))
+colnames(seu) %>% head(10) %>%
+  gsub("-1$", "", .) %>%
+  chartr("ATGC", "TACG", .) %>%
+  stringi::stri_reverse() %>%
+  writeLines(paste0(params$out_dir, "annotated_cell_barcodes_PacBio.txt"))
 ```

@@ -68,7 +68,8 @@ geno_snps <-
   "out/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
   readr::read_tsv() %>%
   filter(id == "plate3_wellA2_dna_run49882", chr == 1, pos < 121500000,
-         mut_vaf %in% c(0, 1), total_depth > 4) %>%
+         mut_vaf < 0.1 | mut_vaf > 0.9,
+         total_depth > 4) %>%
   # assign haplotypes
   mutate(haplotype = ifelse(mut_vaf == 1, "A", "B"))
 

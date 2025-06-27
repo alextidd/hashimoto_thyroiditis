@@ -1,0 +1,172 @@
+{
+    "input": "samplesheet.csv",
+    "outdir": ".",
+    "max_memory": {
+        "bytes": 3188583720550,
+        "giga": 2969,
+        "kilo": 3113851289,
+        "mega": 3040870
+    },
+    "max_cpus": 256,
+    "max_time": {
+        "durationInMillis": 2592000000,
+        "days": 30,
+        "hours": 720,
+        "millis": 2592000000,
+        "minutes": 43200,
+        "seconds": 2592000
+    },
+    "chr": null,
+    "no_stats": false,
+    "no_read_QC": false,
+    "samtools_collate_fast": false,
+    "reads_in_memory": 100000,
+    "genome": null,
+    "igenomes_base": "s3://ngi-igenomes/igenomes/",
+    "igenomes_ignore": false,
+    "fasta": null,
+    "fasta_fai": null,
+    "multiqc_config": null,
+    "multiqc_title": null,
+    "multiqc_logo": null,
+    "max_multiqc_email_size": "25.MB",
+    "multiqc_methods_description": null,
+    "publish_dir_mode": "copy",
+    "email": null,
+    "email_on_fail": null,
+    "plaintext_email": false,
+    "monochrome_logs": false,
+    "hook_url": null,
+    "help": false,
+    "version": false,
+    "config_profile_name": null,
+    "config_profile_description": "The Wellcome Sanger Institute HPC cluster profile",
+    "custom_config_version": "master",
+    "custom_config_base": "https://raw.githubusercontent.com/nf-core/configs/master",
+    "config_profile_contact": "Priyanka Surana (@priyanka-surana)",
+    "config_profile_url": "https://www.sanger.ac.uk",
+    "validationFailUnrecognisedParams": false,
+    "validationLenientMode": false,
+    "validationSchemaIgnoreParams": "genomes,igenomes_base",
+    "validationShowHiddenParams": false,
+    "validate_params": true,
+    "genomes": {
+        "GRCh37": {
+            "fasta": "s3://ngi-igenomes/igenomes//Homo_sapiens/Ensembl/GRCh37/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "GRCh38": {
+            "fasta": "s3://ngi-igenomes/igenomes//Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "CHM13": {
+            "fasta": "s3://ngi-igenomes/igenomes//Homo_sapiens/UCSC/CHM13/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "GRCm38": {
+            "fasta": "s3://ngi-igenomes/igenomes//Mus_musculus/Ensembl/GRCm38/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "TAIR10": {
+            "fasta": "s3://ngi-igenomes/igenomes//Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "EB2": {
+            "fasta": "s3://ngi-igenomes/igenomes//Bacillus_subtilis_168/Ensembl/EB2/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "UMD3.1": {
+            "fasta": "s3://ngi-igenomes/igenomes//Bos_taurus/Ensembl/UMD3.1/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "WBcel235": {
+            "fasta": "s3://ngi-igenomes/igenomes//Caenorhabditis_elegans/Ensembl/WBcel235/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "CanFam3.1": {
+            "fasta": "s3://ngi-igenomes/igenomes//Canis_familiaris/Ensembl/CanFam3.1/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "GRCz10": {
+            "fasta": "s3://ngi-igenomes/igenomes//Danio_rerio/Ensembl/GRCz10/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "BDGP6": {
+            "fasta": "s3://ngi-igenomes/igenomes//Drosophila_melanogaster/Ensembl/BDGP6/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "EquCab2": {
+            "fasta": "s3://ngi-igenomes/igenomes//Equus_caballus/Ensembl/EquCab2/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "EB1": {
+            "fasta": "s3://ngi-igenomes/igenomes//Escherichia_coli_K_12_DH10B/Ensembl/EB1/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Galgal4": {
+            "fasta": "s3://ngi-igenomes/igenomes//Gallus_gallus/Ensembl/Galgal4/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Gm01": {
+            "fasta": "s3://ngi-igenomes/igenomes//Glycine_max/Ensembl/Gm01/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Mmul_1": {
+            "fasta": "s3://ngi-igenomes/igenomes//Macaca_mulatta/Ensembl/Mmul_1/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "IRGSP-1.0": {
+            "fasta": "s3://ngi-igenomes/igenomes//Oryza_sativa_japonica/Ensembl/IRGSP-1.0/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "CHIMP2.1.4": {
+            "fasta": "s3://ngi-igenomes/igenomes//Pan_troglodytes/Ensembl/CHIMP2.1.4/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Rnor_5.0": {
+            "fasta": "s3://ngi-igenomes/igenomes//Rattus_norvegicus/Ensembl/Rnor_5.0/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Rnor_6.0": {
+            "fasta": "s3://ngi-igenomes/igenomes//Rattus_norvegicus/Ensembl/Rnor_6.0/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "R64-1-1": {
+            "fasta": "s3://ngi-igenomes/igenomes//Saccharomyces_cerevisiae/Ensembl/R64-1-1/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "EF2": {
+            "fasta": "s3://ngi-igenomes/igenomes//Schizosaccharomyces_pombe/Ensembl/EF2/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Sbi1": {
+            "fasta": "s3://ngi-igenomes/igenomes//Sorghum_bicolor/Ensembl/Sbi1/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "Sscrofa10.2": {
+            "fasta": "s3://ngi-igenomes/igenomes//Sus_scrofa/Ensembl/Sscrofa10.2/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "AGPv3": {
+            "fasta": "s3://ngi-igenomes/igenomes//Zea_mays/Ensembl/AGPv3/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "hg38": {
+            "fasta": "s3://ngi-igenomes/igenomes//Homo_sapiens/UCSC/hg38/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "hg19": {
+            "fasta": "s3://ngi-igenomes/igenomes//Homo_sapiens/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "mm10": {
+            "fasta": "s3://ngi-igenomes/igenomes//Mus_musculus/UCSC/mm10/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "bosTau8": {
+            "fasta": "s3://ngi-igenomes/igenomes//Bos_taurus/UCSC/bosTau8/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "ce10": {
+            "fasta": "s3://ngi-igenomes/igenomes//Caenorhabditis_elegans/UCSC/ce10/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "canFam3": {
+            "fasta": "s3://ngi-igenomes/igenomes//Canis_familiaris/UCSC/canFam3/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "danRer10": {
+            "fasta": "s3://ngi-igenomes/igenomes//Danio_rerio/UCSC/danRer10/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "dm6": {
+            "fasta": "s3://ngi-igenomes/igenomes//Drosophila_melanogaster/UCSC/dm6/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "equCab2": {
+            "fasta": "s3://ngi-igenomes/igenomes//Equus_caballus/UCSC/equCab2/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "galGal4": {
+            "fasta": "s3://ngi-igenomes/igenomes//Gallus_gallus/UCSC/galGal4/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "panTro4": {
+            "fasta": "s3://ngi-igenomes/igenomes//Pan_troglodytes/UCSC/panTro4/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "rn6": {
+            "fasta": "s3://ngi-igenomes/igenomes//Rattus_norvegicus/UCSC/rn6/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "sacCer3": {
+            "fasta": "s3://ngi-igenomes/igenomes//Saccharomyces_cerevisiae/UCSC/sacCer3/Sequence/WholeGenomeFasta/genome.fa"
+        },
+        "susScr3": {
+            "fasta": "s3://ngi-igenomes/igenomes//Sus_scrofa/UCSC/susScr3/Sequence/WholeGenomeFasta/genome.fa"
+        }
+    }
+}
