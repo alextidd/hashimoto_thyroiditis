@@ -1,0 +1,43 @@
+---
+title: "Visualising celltypes in 10X with SlideTags"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+---
+
+```{r setup, include=FALSE}
+# rmarkdown::render('reports/20250703_visualise_slidetags_in_10X.Rmd', output_file = '20250703_visualise_slidetags_in_10X.html', output_dir = 'reports/')
+
+# libraries
+library(knitr)
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+
+# chunk options
+knitr::opts_knit$set(root.dir = "../")
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      dpi = 300, fig.align = "center")
+```
+
+First, load the annotated Seurat object.
+
+```{r load_seu}
+seurat_dir <- "out/trencadis-seq/seurat/min_3_cells_min_500_genes/nf-trencadis-seq_thyroid_annotate_celltypes_cache/html/"
+seu <- readRDS(list.files(seurat_dir, full.names = TRUE, pattern = "seu_annot"))
+```
+
+Next, load the SlideTags file containing the coordinates.
+
+```{r load_slidetags}
+puck <- readr::read_csv("data/trencadis-seq/slide_tags/Puck_240516_08.csv",
+                        col_names = c("barcode", "x", "y"))
+```

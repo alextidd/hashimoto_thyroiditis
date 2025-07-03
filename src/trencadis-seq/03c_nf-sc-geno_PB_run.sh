@@ -3,13 +3,14 @@
 
 # run
 (
-  cd out/trencadis-seq/nf-sc-geno/
+  cd out/trencadis-seq/nf-sc-geno/PB/
   nextflow run $NFS_TEAM/nextflow/nf-sc-geno \
     --samplesheet samplesheet.csv \
-    --location local \
+    --location irods \
     --out_dir ./ \
+    --no_cell_barcodes \
     -with-tower \
-    -w $LUSTRE_TEAM/resolveome/work/nf-sc-geno/ \
+    -w $LUSTRE_TEAM/resolveome/work/nf-sc-geno/PB/ \
     -N at31@sanger.ac.uk \
     -resume
 )

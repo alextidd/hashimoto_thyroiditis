@@ -6,7 +6,7 @@ library(rtracklayer)
 library(GenomicRanges)
 
 # phase the snps and lift over
-geno_snps_grch37 <-
+phased_snps_grch37 <-
   "out/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
   readr::read_tsv() %>%
   filter(id == "plate3_wellA2_dna_run49882" & chr == 1, pos < 121500000 &
@@ -18,8 +18,8 @@ geno_snps_grch37 <-
                            mut_vaf < 0.1 ~ alt))
 
 # lift over snps
-geno_snps <-
-  geno_snps_grch37 %>%
+phased_snps <-
+  phased_snps_grch37 %>%
   {GRanges(
     seqnames = paste0("chr", .$chr),
     ranges = IRanges(start = .$pos,

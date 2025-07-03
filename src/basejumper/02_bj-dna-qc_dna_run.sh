@@ -1,6 +1,5 @@
 #!/bin/bash
-# donor_id=PD63118
-# cd /lustre/scratch125/casm/team268im/at31/resolveome ; bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03b_BaseJumper_dna-qc_dna_${donor_id}_run -o log/%J_03b_BaseJumper_dna-qc_dna_${donor_id}_run.out -e log/%J_03b_BaseJumper_dna-qc_dna_${donor_id}_run.err "bash src/03b_BaseJumper_dna-qc_dna_run.sh ${donor_id}"
+# donor_id=PD63118 ; cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 02_bj-dna-qc_dna_run -o log/%J_02_bj-dna-qc_dna_run.out -e log/%J_02_bj-dna-qc_dna_run.err "bash src/basejumper/02_bj-dna-qc_dna_run.sh ${donor_id}"
 
 # parameters
 donor_id=$1
@@ -18,7 +17,7 @@ export LSB_EXCLUSIVE=Y
 # run
 (
   cd out/BaseJumper/bj-dna-qc/dna/$donor_id/
-  nextflow run $wd/../nextflow/external/BaseJumper/bj-dna-qc \
+  nextflow run $NFS_TEAM/nextflow/external/BaseJumper/bj-dna-qc \
     --input_csv samplesheet.csv \
     --publish_dir $donor_id \
     --timestamp run \

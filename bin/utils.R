@@ -123,6 +123,14 @@ get_mut_trinucs <- function(dat) {
 
 }
 
+# function: get the reverse complement of vector of barcodes
+rev_comp <- function(seq_vec) {
+  seq_vec %>%
+    gsub("-1$", "", .) %>%
+    chartr("ATGC", "TACG", .) %>%
+    stringi::stri_reverse()
+}
+
 # function: plot the trinucleotide context of the muts
 plot_mut_trinucs <- function(p_dat, p_title = "") {
   sub_colours <-

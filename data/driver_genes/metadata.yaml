@@ -4,9 +4,9 @@
     via: Slack
     date: 2025-04-03
     notes: |
-      Here is an updated list of genes (sorry there is an overlap with the ones
+      "Here is an updated list of genes (sorry there is an overlap with the ones
       you have done but no need to re run them). These are selected genes 
       approaching gene-level significance (q < 0.1) and a few genes with bona
       fide GOF hotspots / regions but without significance (KRAS, BRAF for
-      example).
+      example)."
 
