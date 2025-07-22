@@ -1,3 +1,18 @@
+# function: render report
+render_report <- function(report) {
+  subdir <- strsplit(report, "/")[[1]][2]
+  name <- sub("^[^_]+_", "", subdir)
+  date <- format(Sys.Date(), "%Y%m%d")
+  outdir <- file.path("reports", subdir, date)
+  basename <- paste0(date, "_", name)
+  rmarkdown::render(
+    report,
+    output_file = paste0(basename, ".html"),
+    output_dir = outdir,
+    params = list(title = name,
+                  cache_path = file.path(outdir, paste0(basename, "_cache/"))))
+}
+
 # function: plot VAF heatmap
 plot_vaf_heatmap <- function(p_dat, p_title = "", annotations = c(), show_rownames = TRUE) {
   library(magrittr)

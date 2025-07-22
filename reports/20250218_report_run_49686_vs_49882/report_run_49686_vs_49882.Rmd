@@ -1,0 +1,272 @@
+---
+title: "Coverage and genotyping in PTA"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: false
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+---
+
+```{r setup, include = F, message = F, warning = F, echo = F}
+# chunk options
+knitr::opts_knit$set(root.dir = "../")
+knitr::opts_chunk$set(warning = FALSE,
+                      dpi = 300,
+                      message = FALSE)
+
+# libraries
+library(magrittr)
+library(ggplot2)
+
+# pattient
+curr_pdid <- "PD63118"
+
+# samplesheet
+ss <-
+  system("ls out/resolveome/nf-resolveome/*/samplesheet.tsv", intern = TRUE) %>%
+  purrr::map(readr::read_tsv) %>%
+  dplyr::bind_rows()
+```
+
+Here, we are analysing the mutations genotyped in PTA data. We want to 
+investigate genotyping efficiency, VAF distribution, and allelic imbalance.
+
+### Coverage
+
+Coverage was calculated using `MOSDEPTH` across the genome and across the immune 
+panel for each sample.
+
+```{r load_mosdepth}
+# get summary
+summ <-
+  ss %>%
+  purrr::pmap(function(donor_id, id, run, plex_n, ...) {
+    paste0("out/resolveome/nf-resolveome/", run, "/", donor_id, "/", id,
+            "/mosdepth/", id, ".mosdepth.summary.txt") %>%
+      readr::read_tsv() %>%
+      dplyr::mutate(id = id, run = run, donor_id = donor_id, plex_n = plex_n) %>%
+      # remove extra chromosomes
+      dplyr::filter(!grepl("^GL", chrom), !grepl("Un", chrom),
+                    !grepl("random|HLA", chrom), !grepl("alt$", chrom))
+  }) %>%
+  dplyr::bind_rows() 
+
+# get cov
+cov <-
+  ss %>%
+  purrr::pmap(function(donor_id, id, run, plex_n, ...) {
+    c("region", "global") %>%
+      purrr::set_names() %>%
+      purrr::map(function(lvl) {
+        readr::read_tsv(paste0("out/resolveome/nf-resolveome/", run, "/", donor_id, "/", id,
+                               "/mosdepth/", id, ".mosdepth.", lvl, ".dist.txt"),
+                        col_names = c("chr", "cov", "prop")) %>%
+          # remove extra chromosomes
+          dplyr::filter(!grepl("^GL", chr), !grepl("Un", chr),
+                        !grepl("random|HLA", chr), !grepl("alt$", chr),
+                        prop >= 0.01)
+      }) %>%
+      dplyr::bind_rows(.id = "lvl") %>%
+      dplyr::mutate(id = id, run = run, donor_id = donor_id, plex_n = plex_n)
+  }) %>%
+  dplyr::bind_rows()
+```
+
+We can plot the mean coverage...
+
+```{r mean_cov, fig.width = 10}
+summ %>%
+  dplyr::filter(chrom %in% c("total", "total_region")) %>%
+  dplyr::mutate(lvl = ifelse(grepl("region$", chrom), "region", "global"),
+                chrom = gsub("_.*", "", chrom)) %>%
+  ggplot(aes(x = tidytext::reorder_within(id, -mean, run), y = mean, fill = lvl)) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Mean coverage",
+       x = "Plex",
+       y = "Mean coverage") +
+  ggh4x::facet_grid2(~ run, scales = "free_x", space = "free_x") +
+  theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
+  tidytext::scale_x_reordered()
+```
+
+We can plot the coverage distribution...
+
+```{r cov_dist}
+cov %>%
+  dplyr::filter(chr == "total") %>%
+  ggplot(aes(x = cov, y = prop, color = id, group = id)) +
+  geom_line() +
+  labs(title = paste("Coverage distribution"),
+       x = "Coverage",
+       y = "Proportion of bases at coverage") +
+  theme_minimal() +
+  facet_grid(run ~ lvl) +
+  theme(legend.position = "none")
+```
+
+### Genotyping
+
+For patient `r curr_pdid`, we have genotyped mutations from two sources:
+
+- Mutations from targeted immune and whole exome Nanoseq
+
+- Heterozygous, common SNPs from `CaVEMan` output
+
+We load the mutations from Nanoseq and the SNPs from CaVEMan...
+
+```{r load_mutations}
+muts_and_snps <-
+  readr::read_tsv("out/resolveome/nf-resolveome/mutations.tsv") %>%
+  dplyr::distinct(source, pdid, chr, pos, ref, alt)
+muts_and_snps %>% dplyr::count(source)
+```
+
+Next, we load genotyping outputs and calculate VAFs...
+
+```{r load_geno}
+mut_depth_bins <- c("0", "1", ">1", ">5", ">10", ">50")
+geno <-
+  ss %>%
+  purrr::pmap(function(donor_id, id, run, plex_n, ...) {
+    paste0("out/resolveome/nf-resolveome/", run, "/", donor_id, "/", id,
+            "/genotyping/", id, "_genotyped_mutations.tsv") %>%
+      readr::read_tsv(col_types = list(chr = readr::col_character())) %>%
+      dplyr::mutate(id = id, run = run, donor_id = donor_id, plex_n = plex_n)
+  }) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(mut_vaf = mut_depth / total_depth,
+                mut_id = paste(chr, pos, ref, alt)) %>%
+  dplyr::left_join(muts_and_snps) %>%
+  # bin mutant depths
+  dplyr::mutate(mut_depth_bin = dplyr::case_when(mut_depth > 50 ~ ">50",
+                                                 mut_depth > 10 ~ ">10",
+                                                 mut_depth > 5 ~ ">5",
+                                                 mut_depth > 1 ~ ">1",
+                                                 mut_depth == 1 ~ "1",
+                                                 mut_depth == 0 ~ "0") %>%
+                    factor(levels = mut_depth_bins))
+```
+
+We now plot the VAF distributions...
+
+```{r plot_vaf, fig.width = 10, fig.height = 8}
+# function: plot VAF distribution
+plot_vaf_dist <- function(p_dat) {
+  p_dat %>%
+    ggplot(aes(x = mut_vaf, fill = mut_depth_bin, colour = mut_depth_bin)) +
+    geom_histogram(bins = 100) +
+    facet_grid(source ~ run, scales = "free_y") +
+    theme_minimal() +
+    viridis::scale_fill_viridis(discrete = TRUE) +
+    viridis::scale_color_viridis(discrete = TRUE)
+}
+
+# plot vaf dist
+plot_vaf_dist(geno) +
+  ggtitle("Distribution of VAFs")
+
+# plot non-zero vaf dist
+plot_vaf_dist(dplyr::filter(geno, mut_depth > 0)) +
+  ggtitle("Distribution of non-zero VAFs")
+
+# plot vaf dist with increasing alt depth
+seq(1,10) %>%
+  purrr::map(function(min_mut_depth) {
+    geno %>%
+      dplyr::filter(mut_depth >= min_mut_depth) %>%
+      plot_vaf_dist() +
+      ggtitle(paste("Distribution of VAFs, min", min_mut_depth, "alt depth"))
+  })
+```
+
+How many mutations and SNPs were genotyped per cell?
+
+```{r n_genotyped, fig.width = 10, fig.height = 8}
+geno %>%
+  dplyr::mutate(genotyped = ifelse(mut_depth > 0, mut_id, NA)) %>%
+  dplyr::group_by(source, id, run) %>%
+  dplyr::mutate(n = dplyr::n_distinct(mut_id, na.rm = TRUE)) %>%
+  dplyr::group_by(source, id, run, n, mut_depth_bin) %>%
+  dplyr::summarise(n_genotyped = dplyr::n_distinct(genotyped, na.rm = TRUE)) %>%
+  dplyr::mutate(prop_genotyped = n_genotyped / n) %>%
+  dplyr::group_by(run, id) %>%
+  dplyr::mutate(total_prop = sum(prop_genotyped)) %>%
+  ggplot(aes(x = tidytext::reorder_within(id, -total_prop, run),
+             y = prop_genotyped, fill = mut_depth_bin)) +
+  geom_col(position = "stack") +
+  ggh4x::facet_grid2(source ~ run, scales = "free", space = "free_x") +
+  tidytext::scale_x_reordered(guide = guide_axis(angle = -90)) +
+  labs(title = "Proportion of mutations genotyped per source per alt depth",
+       x = "Plex",
+       y = "Proportion of mutations genotyped") +
+  theme_minimal() +
+  viridis::scale_fill_viridis(discrete = TRUE)
+```
+
+Which mutations had the top VAFs and what were their depths?
+
+```{r top_vafs}
+geno %>%
+  dplyr::filter(source == "nanoseq_mutations") %>%
+  dplyr::arrange(-mut_vaf, -mut_depth) %>%
+  dplyr::filter(mut_vaf > 0) %>%
+  dplyr::select(source, id, mut_id, mut_vaf, mut_depth, total_depth) %>%
+  head(15)
+```
+
+How many mutations were shared between multiple cells?
+
+```{r shared_muts}
+p_dat <-
+  geno %>%
+  dplyr::filter(mut_depth > 0) %>%
+  dplyr::group_by(mut_id, source) %>%
+  dplyr::summarise(n_samples_w_mut = dplyr::n_distinct(id),
+                   mean_mut_vaf = mean(mut_vaf),
+                   ids = id %>% unique() %>% sort() %>% paste(collapse = ",")) %>%
+  dplyr::ungroup() %>%
+  dplyr::count(source, n_samples_w_mut) %>%
+  dplyr::arrange(-n_samples_w_mut) %>%
+  {split(., .$source)}
+
+p_dat %>%
+  dplyr::bind_rows() %>%
+  ggplot(aes(x = n_samples_w_mut, y = n)) +
+  geom_col() +
+  facet_wrap(~ source)
+```
+
+We can compare the unbiased NanoSeq VAF to the PTA VAF. The axes in this plot 
+are log-scaled. The dashed line represents a VAF of 0.5.
+
+```{r nanoseq_vaf_vs_pta_vaf}
+nanoseq_muts <-
+  readr::read_tsv("data/nanoseq/PD63118/samplesheet.tsv") %>%
+  purrr::pmap(function(muts_file, seq_type) {
+    readr::read_tsv(muts_file) %>%
+      dplyr::mutate(seq_type = seq_type)
+  }) %>%
+  dplyr::bind_rows() %>%
+  dplyr::mutate(pdid = stringr::str_sub(sampleID, 1, 7)) %>%
+  dplyr::filter(pdid == curr_pdid) %>%
+  dplyr::mutate(mut_id = paste(chr, pos, ref, alt))
+geno %>%
+  dplyr::inner_join(nanoseq_muts) %>%
+  dplyr::filter(total_depth > 0) %>%
+  dplyr::mutate(unbiased_vaf = (bam_mut - times_called) / (bam_cov - duplex_cov)) %>%
+  ggplot(aes(x = unbiased_vaf, y = mut_vaf, size = total_depth, alpha = total_depth)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed") +
+  geom_point() +
+  labs(main = "PTA VAF versus NanoSeq unbiased VAF",
+       x = "NanoSeq unbiased VAF",
+       y = "PTA VAF") +
+  theme_classic()
+```
+

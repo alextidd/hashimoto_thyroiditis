@@ -15,7 +15,7 @@ library(biomaRt)
 
 # get common het snps
 snps_1p <-
-  readr::read_tsv("out/nf-resolveome/muts_and_snps/PD63118/caveman_snps.tsv") %>%
+  readr::read_tsv("out/resolveome/nf-resolveome/muts_and_snps/PD63118/caveman_snps.tsv") %>%
   filter(chr == 1, pos < 121500000)
 
 # get tnfsrf14 position
@@ -65,7 +65,7 @@ snps_1p_in_genes <-
 
 # phase the snps
 geno_snps <-
-  "out/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
+  "out/resolveome/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
   readr::read_tsv() %>%
   filter(id == "plate3_wellA2_dna_run49882", chr == 1, pos < 121500000,
          mut_vaf < 0.1 | mut_vaf > 0.9,
@@ -81,7 +81,7 @@ geno_snps %>%
 
 # look at baf of snps across loh region
 p_dat <-
-  "out/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
+  "out/resolveome/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
   readr::read_tsv() %>%
   filter(id == "plate3_wellA2_dna_run49882", chr == 1, pos < 121500000)
 p_dat %>%
