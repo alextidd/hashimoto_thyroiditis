@@ -1,5 +1,5 @@
 ---
-title: "First year report plots"
+title: "nf-resolveome report"
 author: "Alexandra Tidd"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -16,8 +16,6 @@ params:
 ---
 
 ```{r setup, include = F, message = F, warning = F, echo = F}
-# rmarkdown::render('reports/20250422_first_year_report_plots.Rmd', output_file = '20250422_first_year_report_plots.html', output_dir = 'reports')
-
 # donor
 donor_id_i <- "PD63118"
 
@@ -242,8 +240,6 @@ snps <-
       group_by(seq_type)
     snps
   }, file = "snps.rds", rerun = params$rerun)
-
-
 
 # get binned vafs and depths
 p_snps_dat <-

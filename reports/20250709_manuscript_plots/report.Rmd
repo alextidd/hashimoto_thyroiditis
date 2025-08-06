@@ -16,7 +16,15 @@ params:
   cache_path: null
 ---
 
-```{r child = "../reports/template.Rmd"}
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
 ```
 
 ```{r libraries, include = F, message = F, warning = F, echo = F}
@@ -35,6 +43,9 @@ library(biomaRt)
 library(DESeq2)
 library(clusterProfiler)
 source("bin/utils.R")
+
+# set ggplot theme
+theme_set(theme_classic())
 
 # celltype palette
 pal <- c("B" = "#2f9e77",
@@ -60,6 +71,7 @@ impact_colours <- c("Missense" = "#5f9fa0",
 # Samplesheet
 
 ```{r load_ss}
+# load manual inspection data
 man_insp <-
   read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
   dplyr::select(-run_id) %>%
@@ -67,6 +79,8 @@ man_insp <-
   mutate(loh_1p = as.character(as.numeric(loh_1p)),
          loh_9p = as.character(as.numeric(loh_9p)),
          loh_9q = as.character(as.numeric(loh_9q)))
+
+# load samplesheet
 ss <-
   file.path(Sys.getenv("LUSTRE_TEAM"),
             "projects/hashimoto_thyroiditis/data/bams/samplesheet_local.csv") %>%
@@ -74,6 +88,8 @@ ss <-
   # add manual inspection data
   left_join(man_insp) %>%
   filter(donor_id == "PD63118")
+
+# load list of driver genes
 driver_genes <-
   readLines("../trencadis-seq/data/thyroid/driver_genes/driver_genes.txt")
 ```
@@ -148,7 +164,9 @@ cts %>%
 
 # get stats
 ct_stats <-
-  cts %>% dplyr::count(celltype_VDJ_SHM_CSR) %>% {split(.$n, .$celltype_VDJ_SHM_CSR)}
+  cts %>%
+  dplyr::count(celltype_VDJ_SHM_CSR) %>%
+  {split(.$n, .$celltype_VDJ_SHM_CSR)}
 ```
 
 Based on VDJ, SHM, and CSR annotations, 
@@ -223,10 +241,10 @@ dist %>%
 
 ## Allelic balance of coverage
 
-```{r heterozygosity, eval = F}
+```{r heterozygosity, eval = params$rerun}
 # get genotyped snps
 snps <-
-  c("dnahyb") %>% #c("dna", "dnahyb") %>%
+  c("dnahyb") %>% # c("dna", "dnahyb") %>%
   purrr::set_names() %>%
   purrr::map(~
     read_tsv(file.path("out/resolveome/nf-resolveome", .x, "PD63118/genotyping",
@@ -269,6 +287,30 @@ saveRDS(allelic_statuses, "reports/20250709_resolveome_plots_cache/allelic_statu
 ```{r plot_allelic_vaf_dist, fig.height = 8}
 p_snps_dat <-
   readRDS("reports/20250709_resolveome_plots_cache/p_snps_dat.rds")
+p_snps_dat %>%
+  ggplot(aes(x = mut_vaf_mid, y = n, fill = total_depth_bin)) +
+  geom_col() +
+  scale_fill_viridis_d() +
+  theme_classic() +
+  labs(title = "VAF distribution", x = "VAF bin", y = "n mutations") +
+  lims(x = c(0, 1)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  facet_grid(seq_type ~ ., scales = "free_y")
+
+p_snps_dat <-
+  snps %>%
+  filter(id == "plate10_wellA7_dnahyb_run50227") %>%
+  dplyr::mutate(
+    mut_vaf = ifelse(total_depth == 0, 0, mut_vaf),
+    total_depth_bin = cut(
+      total_depth, breaks = c(-Inf, 0, 10, 20, 50, 100, Inf),
+      labels = c("0", "<10", "10–20", "20–50", "50–100", ">100")),
+    mut_vaf_bin = cut(mut_vaf, breaks = seq(0, 1, length.out = 30 + 1),
+                      include.lowest = TRUE),
+    mut_vaf_min = stringr::str_extract(mut_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
+    mut_vaf_high = as.numeric(stringr::str_extract(mut_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
+    mut_vaf_mid = (mut_vaf_min + mut_vaf_high) / 2) %>%
+  dplyr::count(mut_vaf_bin, mut_vaf_mid, total_depth_bin)
 p_snps_dat %>%
   ggplot(aes(x = mut_vaf_mid, y = n, fill = total_depth_bin)) +
   geom_col() +

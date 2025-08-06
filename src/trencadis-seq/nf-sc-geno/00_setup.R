@@ -14,23 +14,24 @@ library(GenomicRanges)
 source("bin/utils.R")
 
 # directories
+wd <- getwd()
 out_dir <- "out/trencadis-seq/nf-sc-geno/"
+dir.create(file.path(out_dir, "snps"), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path(out_dir, "TX"), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path(out_dir, "PB"), recursive = TRUE, showWarnings = FALSE)
 
 # save annotated TX barcodes
-ct_annot_dir <- "out/trencadis-seq/seurat/min_3_cells_min_500_genes/nf-trencadis-seq_thyroid_annotate_celltypes_cache/html/"
-barcodes_tx <-
+barcodes <- list()
+ct_annot_dir <- "out/trencadis-seq/seurat/ncells_3_nfeature_500-2000_ncount_1000-15000_percent_mt_5/nf-trencadis-seq_thyroid_annotate_celltypes_cache/html/"
+barcodes$TX <-
   list.files(ct_annot_dir, pattern = "seu_annotated", full.names = TRUE) %>%
   readRDS() %>%
   colnames()
-barcodes_file_tx <- file.path(out_dir, "TX/barcodes.txt")
-writeLines(barcodes_tx, barcodes_file_tx)
+writeLines(barcodes$TX, file.path(wd, out_dir, "TX/barcodes.txt"))
 
 # save annotated PB barcodes
-barcodes_pb <- rev_comp(barcodes_tx)
-barcodes_file_pb <- file.path(out_dir, "PB/barcodes.txt")
-writeLines(barcodes_pb, barcodes_file_pb)
+barcodes$PB <- rev_comp(barcodes$TX)
+writeLines(barcodes$PB, file.path(wd, out_dir, "PB/barcodes.txt"))
 
 # phase the snps
 phased_snps_grch37 <-
@@ -61,43 +62,20 @@ phased_snps <-
                   hap_A = .$hap_A, hap_B = .$hap_B)} %>%
   dplyr::distinct()
 
+# save phased snps
+muts_file <- file.path(wd, out_dir, "snps/PD63118_phased_snps.tsv")
+phased_snps %>%
+  readr::write_tsv(muts_file)
+
 # make samplesheet
 ss <-
   readr::read_csv("data/trencadis-seq/metadata/samplesheet.csv") %>%
-  {split(select(., id, bam), .$kit)}
-ss$PB$barcodes <- barcodes_pb
-ss$TX$barcodes <- barcodes_tx
-# TX_WT_PD63118
-# /lustre/scratch125/casm/teams/team268/at31/projects/hashimoto_thyroiditis/data/vartrix/possorted_genome_bam.bam
-# /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis/out/trencadis-seq/nf-sc-geno/caveman_snps_1p.tsv
-# /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis/out/trencadis-seq/nf-sc-geno/barcodes.txt
-
-# plot phasing
-p_size <- 0.8
-p_alpha <- 0.2
-plate3_wellA2 %>%
-  inner_join(phased_snps_grch37 %>% mutate(chr = as.character(chr))) %>%
-  mutate(haplotype = case_when(mut_vaf < 0.1 & ref == hap_A ~ "A",
-                               mut_vaf < 0.1 & ref == hap_B ~ "B",
-                               mut_vaf > 0.9 & alt == hap_A ~ "A",
-                               mut_vaf > 0.9 & alt == hap_B ~ "B"),
-         mut_baf = 1 - mut_vaf) %>%
-  #filter(!is.na(haplotype)) %>%
-  tidyr::pivot_longer(cols = c(mut_vaf, mut_baf), names_to = "vaf_type") %>%
-  ggplot(aes(x = pos, y = value, colour = haplotype)) +
-  # add line at vaf = 0.5
-  geom_hline(yintercept = 0.5, colour = "red") +
-  # add baf points
-  geom_point(size = p_size, alpha = p_alpha) +
-  # add baf bands
-  scale_x_continuous(expand = c(0, 0)) +
-  ggh4x::facet_grid2(. ~ chr, scales = "free_x", space = "free_x") +
-  theme_classic() +
-  theme(panel.spacing = unit(0, "lines"),
-        panel.border = element_rect(color = "grey", fill = NA,
-                                    linewidth = 0),
-        strip.background = element_rect(color = "grey", fill = NA,
-                                        linewidth = 0, linetype = "solid"),
-        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
-        legend.position = "none") +
-  scale_colour_manual(values = c("A" = "#ff7be7", "B" = "blue"), na.value = "black")
+  select(id, bam, kit) %>%
+  mutate(cell_barcodes = file.path(wd, out_dir, kit, "barcodes.txt"),
+         mutations = muts_file) %>%
+  {split(., .$kit)}
+purrr::walk2(names(ss), ss, function(kit_i, ss_i) {
+  ss_i %>%
+    select(-kit) %>%
+    readr::write_csv(file.path(out_dir, kit_i, "samplesheet.csv"))
+})

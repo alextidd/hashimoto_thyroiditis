@@ -12,7 +12,7 @@ This repository contains scripts, configurations, and reports for analyzing the 
 ├── log                # log files from bsub jobs
 ├── out                # output files
 ├── reports            # generated reports and visualizations, summarising the analysis
-└── src                # source code for analysis scripts, organised by {technology}/{analysis}
+└── src                # source code for analyses, organised by {technology}/{analysis}
     ├── 00_setup
     │   ├── 00_generate_samplesheet.R
     │   └── 01_get_bams.sh

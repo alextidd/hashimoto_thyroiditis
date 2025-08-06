@@ -1,5 +1,5 @@
 ---
-title: "Ginkgo plots"
+title: "`r params$title`"
 author: "Alexandra Tidd"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -11,28 +11,45 @@ output:
     toc_collapsed: true
     toc_depth: 4
     theme: lumen
+params:
+  title: null
+  cache_path: null
 ---
 
-```{r setup, include=FALSE}
-# rmarkdown::render('reports/20250312_gather_gingko_plots.Rmd', output_file = '20250312_gather_gingko_plots.html', output_dir = 'reports/')
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
+```
 
+```{r setup2, include=FALSE}
 # libraries
 library(ggplot2)
 library(knitr)
 library(magrittr)
-
-# chunk options
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
-knitr::opts_knit$set(root.dir = "../")
 ```
 
 ```{r}
+# get ids
+ss <-
+  "out/resolveome/basejumper/bj-dna-qc/dna/PD63118/samplesheet.csv" %>%
+  readr::read_csv() %>%
+  dplyr::select(id = biosampleName) %>%
+  dplyr::mutate(cell_id = gsub("_dna.*", "", id))
+
 # get metadata
-man_insp <- readr::read_tsv("data/resolveome/manual_inspection/PD63118.tsv")
+man_insp <-
+  readr::read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
+  dplyr::left_join(ss %>% dplyr::select(id, cell_id))
 
 # define the directory and pattern for JPEG files
 wd <- getwd()
-out_dir <- paste0(wd, "/out/resolveome/basejumper/bj-dna-qc/dna/PD63118_250312_162149/tertiary_analyses/cnv_ginkgo")
+out_dir <- paste0(wd, "/out/resolveome/basejumper/bj-dna-qc/dna/PD63118/PD63118_run/tertiary_analyses/cnv_ginkgo")
 pattern <- "cnv_binsize_1000000_.*_CN.jpeg"
 
 # list all matching JPEG files
@@ -46,8 +63,9 @@ labels <- gsub("_CN.jpeg", "", labels)
 # Summary plot
 
 ```{r get_profiles, fig.height = 12, fig.width = 14}
+# load segment calls
 segcopy <-
-  readr::read_tsv("out/resolveome/basejumper/bj-dna-qc/dna/PD63118_250312_162149/tertiary_analyses/cnv_ginkgo/SegCopy.binsize_1000000.tsv") %>%
+  readr::read_tsv(file.path(out_dir, "SegCopy.binsize_1000000.tsv")) %>%
   tidyr::pivot_longer(cols = -c("CHR", "START", "END"), names_to = "id", values_to = "ploidy")
 
 # create colour gradient

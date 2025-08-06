@@ -3,17 +3,6 @@
 # libraries
 library(magrittr)
 
-# dirs
-wd <- getwd()
-data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "projects/hashimoto_thyroiditis/data/bams/")
-out_dir <- file.path(wd, "out/resolveome/nf-resolveome/muts_and_snps/")
-dir.create(out_dir, recursive = TRUE)
-
-# samplesheet
-ss_bams <-
-  readr::read_csv(file.path(data_dir, "samplesheet_local.csv")) %>%
-  dplyr::filter(seq_type %in% c("dna", "dnahyb"))
-
 # function: define mutation type based on ref and alt, split up mnvs and dnvs
 type_mutations <- function(df) {
   typed_df <-
@@ -47,6 +36,17 @@ type_mutations <- function(df) {
   typed_df
 }
 
+# dirs
+wd <- getwd()
+data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "projects/hashimoto_thyroiditis/data/bams/")
+out_dir <- file.path(wd, "out/resolveome/nf-resolveome/muts_and_snps/")
+dir.create(out_dir, recursive = TRUE)
+
+# samplesheet
+ss_bams <-
+  readr::read_csv(file.path(data_dir, "samplesheet_local.csv")) %>%
+  dplyr::filter(seq_type %in% c("dna", "dnahyb"))
+
 # get common snp sites
 common_snps <-
   "../../reference/nanoseq/genome_masks/GRCh37_WGNS/SNP_GRCh37.wgns.bed.gz" %>%
@@ -57,23 +57,26 @@ common_snps <-
 # get a caveman snp file from a sample with high coverage
 # extract common snps that are heterozygous
 # 0.3 < VAF < 0.7 and DP > 50
-# PD63118b_lo0044 has the highest coverage at 68X according to picard
+# PD63118b_lo0044 has the highest coverage according to picard (68X)
+# PD66718b_lo0041 has the highest coverage according to CanApps calculated cov
 caveman_snps <-
-  "/nfs/irods-cgp-sr12-sdc/intproj/3464/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz" %>%
-  readr::read_tsv(comment = "##") %>%
-  dplyr::mutate(
-    DP = strsplit(INFO, ";") %>% purrr::map_chr(~ .x[grepl("^DP=", .x)]) %>%
-      strsplit("=") %>% purrr::map_chr(~ .x[2]) %>% as.integer(),
-    VAF = gsub(".*:", "", TUMOUR) %>% as.numeric()) %>%
-  dplyr::filter(DP > 50, VAF > 0.3, VAF < 0.7) %>%
-  # get those at common snp sites
-  dplyr::inner_join(common_snps) %>%
-  dplyr::transmute(donor_id = "PD63118", chr = `#CHROM`, pos = POS, ref = REF,
-                   alt = ALT) %>%
-  # type the mutations
-  type_mutations() %>%
-  dplyr::distinct() %>%
-  split(.$donor_id)
+  c("PD66718" = "/lustre/scratch124/casm/references/nst_links/live/3438/PD66718b_lo0041/PD66718b_lo0041.caveman_c.snps.vcf.gz",
+    "PD63118" = "/nfs/irods-cgp-sr12-sdc/intproj/3464/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz") %>%
+  purrr::map(function(x) {
+    x %>%
+      readr::read_tsv(comment = "##") %>%
+      dplyr::mutate(
+        DP = strsplit(INFO, ";") %>% purrr::map_chr(~ .x[grepl("^DP=", .x)]) %>%
+          strsplit("=") %>% purrr::map_chr(~ .x[2]) %>% as.integer(),
+        VAF = gsub(".*:", "", TUMOUR) %>% as.numeric()) %>%
+      dplyr::filter(DP > 50, VAF > 0.3, VAF < 0.7) %>%
+      # get those at common snp sites
+      dplyr::inner_join(common_snps) %>%
+      dplyr::transmute(chr = `#CHROM`, pos = POS, ref = REF, alt = ALT) %>%
+      # type the mutations
+      type_mutations() %>%
+      dplyr::distinct()
+  })
 
 # get mutations
 nanoseq_muts <-

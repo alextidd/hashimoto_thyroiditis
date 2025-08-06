@@ -1,5 +1,5 @@
 #!/bin/bash
-# donor_id=PD63118 ; cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J basejumper_04a_bj-somatic-variantcalling_dna_run -o log/%J_basejumper_04a_bj-somatic-variantcalling_dna_run.out -e log/%J_basejumper_04a_bj-somatic-variantcalling_dna_run.err "bash src/basejumper/04a_bj-somatic-variantcalling_dna_run.sh $donor_id"
+# donor_id=PD63118 ; cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J resolveome_basejumper_04_bj-somatic-variantcalling_dna_run -o log/%J_resolveome_basejumper_04_bj-somatic-variantcalling_dna_run.out -e log/%J_resolveome_basejumper_04_bj-somatic-variantcalling_dna_run.err "bash src/resolveome/basejumper/04_bj-somatic-variantcalling_dna_run.sh $donor_id"
 
 # parameters
 donor_id=$1

@@ -7,8 +7,12 @@ fontsize: 11pt
 params:
   out_dir: NULL
   rerun: false
-  min_cells: 3
-  min_features: 200
+  min_n_cells: 3
+  min_nfeature_rna: 500
+  max_nfeature_rna: 2000
+  min_ncount_rna: 1000
+  max_ncount_rna: 15000
+  max_percent_mt: 5
   celltypes: NULL
 output:
   html_document:
@@ -23,9 +27,8 @@ output:
 ---
 
 ```{r initialise, include = F}
-# out_dir <- "out/trencadis-seq/seurat/min_3_cells_min_1000_genes/" ; rmarkdown::render("src/trencadis-seq/02_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 1000, out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
-# out_dir <- "out/trencadis-seq/seurat/min_3_cells_min_200_genes/" ; rmarkdown::render("src/trencadis-seq/02_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 500, celltypes = paste0(out_dir, "cluster_summary_annotated.tsv"), out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
-# out_dir <- "out/trencadis-seq/seurat/min_3_cells_min_500_genes/" ; rmarkdown::render("src/trencadis-seq/02_annotate_celltypes.Rmd", params = list(min_cells = 3, min_features = 500, celltypes = paste0(out_dir, "cluster_summary_annotated.tsv"), out_dir = out_dir), output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = out_dir)
+# params_i <- list(min_n_cells = 3, min_nfeature_rna = 500, max_nfeature_rna = 2000, min_ncount_rna = 1000, max_ncount_rna = 15000, max_percent_mt = 5, rerun = FALSE); params_i$out_dir <- paste0("out/trencadis-seq/seurat/ncells_", params_i$min_n_cells, "_nfeature_", params_i$min_nfeature_rna, "-", params_i$max_nfeature_rna, "_ncount_", params_i$min_ncount_rna, "-", params_i$max_ncount_rna, "_percent_mt_", params_i$max_percent_mt, "/"); params_i$celltypes <- paste0(params_i$out_dir, "cluster_summary_annotated.tsv")
+# rmarkdown::render("src/trencadis-seq/seurat/01_annotate_celltypes.Rmd", params = params_i, output_file = "nf-trencadis-seq_thyroid_annotate_celltypes.html", output_dir = params_i$out_dir)
 
 # libraries
 library(magrittr)
@@ -34,6 +37,7 @@ library(SingleR)
 library(ggalluvial)
 library(ggplot2)
 library(Matrix)
+library(DoubletFinder)
 
 # set seed for reproducibility
 set.seed(42)
@@ -44,7 +48,7 @@ ggplot2::theme_set(ggplot2::theme_bw())
 ggplot2::theme_update(legend.text = ggplot2::element_text(size = 7))
 
 # knitr options
-knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_knit$set(root.dir = "../../..")
 knitr::opts_chunk$set(
   warning = FALSE, dpi = 300, message = FALSE,
   fig.align = "center",
@@ -53,23 +57,79 @@ knitr::opts_chunk$set(
     "/nf-trencadis-seq_thyroid_annotate_celltypes_cache/html/"))
 ```
 
-First we load the `h5` object and convert it to a `Seurat` object.
+First, we must move the cellranger h5 objects from IRODS to `nfs`.
+
+```{bash iget_h5, eval = F}
+# load irods
+module load IRODS/1.0
+iinit
+
+# dirs and samples
+cellranger_dir=/seq/illumina/runs/49/49200/cellranger/
+samples=(PD63118b_st0001 PD63118b_st0002)
+sample_subdirs=(cellranger720_count_49200_7613STDY14897605_GRCh38-3_0_0 cellranger720_count_49200_7613STDY14897606_GRCh38-3_0_0)
+
+for i in ${!samples[@]} ; do
+
+  # sample
+  sample=${samples[$i]}
+  sample_dir=$cellranger_dir/${sample_subdirs[$i]}
+  echo $sample 
+  echo $sample_dir
+
+  # dir
+  data_dir=data/trencadis-seq/cellranger/$sample/
+  mkdir -p $data_dir
+
+  # iget
+  iget -k $sample_dir/filtered_feature_bc_matrix.h5 $data_dir
+  echo $sample_dir/filtered_feature_bc_matrix.h5 > $data_dir/README.txt
+
+done
+```
+
+We load the `h5` objects, combine them and convert to a `Seurat` object.
 
 ```{r load_seu}
 seu <-
   xfun::cache_rds({
-    # load h5 object
+    
+    # list of h5s
     h5 <-
-      "data/trencadis-seq/cellranger/49200_7613STDY14897605_filtered_feature_bc_matrix.h5" %>%
-      Read10X_h5()
+      "ls data/trencadis-seq/cellranger/*/filtered_feature_bc_matrix.h5" %>%
+      system(intern = TRUE) %>%
+      purrr::map(Read10X_h5)
 
-    # convert to matrix csv and save
-    write.csv(as.matrix(h5), file = "out/trencadis-seq/celltypist/matrix.csv")
+    # get all barcodes
+    unique_barcodes <- lapply(h5, colnames) %>% unlist() %>% unique()
 
-    # convert to seurat object
-    seu <-
-      CreateSeuratObject(counts = h5, min.cells = params$min_cells, min.features = params$min_features)
+    # align and sum matrices
+    h5 <-
+      purrr::map(h5, function(m) {
+        # reorder and fill in missing barcodes
+        missing <- setdiff(unique_barcodes, colnames(m))
+        if (length(missing) > 0) {
+          zero_mat <- Matrix(0, nrow = nrow(m), ncol = length(missing), sparse = TRUE)
+          colnames(zero_mat) <- missing
+          rownames(zero_mat) <- rownames(m)
+          m <- cbind(m, zero_mat)
+        }
+        # reorder to consistent barcode order
+        m[, unique_barcodes]
+      }) %>%
+      # sum matrices
+      {Reduce(`+`, .)}
+
+    # save combined matrix for celltypist
+    write.csv(as.matrix(h5), file = "out/trencadis-seq/celltypist/matrix.csv",
+              quote = FALSE)
+
+    # create seurat object
+    seu <- CreateSeuratObject(counts = h5, min.cells = params$min_n_cells)
+
+    # return
     seu
+
   }, file = "seu.rds", rerun = params$rerun)
 ```
 
@@ -101,84 +161,34 @@ FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "percent.mt")
 FeatureScatter(seu, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
 ```
 
-- We filter cells that have unique feature counts over 2,500 or less than 300
-- We filter cells that have >5% mitochondrial counts
+We apply filters.
 
 ```{r filter}
+seu_n_prefilter <- ncol(seu)
 seu <-
   xfun::cache_rds({
     seu %>%
-      subset(subset = nFeature_RNA > 300 &
-               nCount_RNA > 500 &
-               nFeature_RNA < 2500 &
-               percent.mt < 3)
+      subset(subset = nFeature_RNA > params$min_nfeature_rna &
+                      nFeature_RNA < params$max_nfeature_rna &
+                      nCount_RNA > params$min_ncount_rna &
+                      nCount_RNA < params$max_ncount_rna &
+                      percent.mt < params$max_percent_mt)
   }, file = "seu_filtered.rds", rerun = params$rerun)
+seu_n_postfilter <- ncol(seu)
+
+cat("Number of cells pre-filtering:", seu_n_prefilter, "\n")
+cat("Number of cells post-filtering:", seu_n_postfilter, "\n")
 ```
 
 ## Normalisation and scaling
 
-After removing unwanted cells from the dataset, the next step is to normalize
-the data. By default, we employ a global-scaling normalization method 
-“LogNormalize” that normalizes the feature expression measurements for each cell 
-by the total expression, multiplies this by a scale factor (10,000 by default), 
-and log-transforms the result. In Seurat v5, Normalized values are stored in 
-seu[["RNA"]]$data.
-
 ```{r norm}
 seu <-
   xfun::cache_rds({
-    NormalizeData(seu)
+    seu <- NormalizeData(seu)
+    seu <- FindVariableFeatures(seu)
+    seu <- ScaleData(seu, features = rownames(seu))
   }, file = "seu_normalized.rds", rerun = params$rerun)
-```
-
-While this method of normalization is standard and widely used in scRNA-seq
-analysis, global-scaling relies on an assumption that each cell originally
-contains the same number of RNA molecules. We and others have developed
-alternative workflows for the single cell preprocessing that do not make these 
-assumptions. For users who are interested, please check out our SCTransform() 
-normalization workflow. The method is described in our paper, with a separate 
-vignette using Seurat here. The use of SCTransform replaces the need to run 
-NormalizeData, FindVariableFeatures, or ScaleData (described below).
-
-## Identifying highly variable features
-
-We next calculate a subset of features that exhibit high cell-to-cell variation 
-in the dataset (i.e, they are highly expressed in some cells, and lowly 
-expressed in others). We and others have found that focusing on these genes in 
-downstream analysis helps to highlight biological signal in single-cell 
-datasets.
-
-Our procedure in Seurat is described in detail here, and improves on previous versions by directly modeling the mean-variance relationship inherent in single-cell data, and is implemented in the FindVariableFeatures() function. By default, we return 2,000 features per dataset. These will be used in downstream analysis, like PCA.
-
-```{r hvgs}
-seu <-
-  xfun::cache_rds({
-    FindVariableFeatures(seu, selection.method = "vst", nfeatures = 2000)
-  }, file = "seu_hvgs.rds", rerun = params$rerun)
-
-# Identify the 10 most highly variable genes
-top10 <- head(VariableFeatures(seu), 10)
-
-# plot variable features with and without labels
-VariableFeaturePlot(seu) %>% LabelPoints(points = top10, repel = TRUE)
-```
-
-## Scaling the data
-
-Next, we apply a linear transformation (‘scaling’) that is a standard pre-processing step prior to dimensional reduction techniques like PCA. The ScaleData() function:
-
-- Shifts the expression of each gene, so that the mean expression across cells is 0
-- Scales the expression of each gene, so that the variance across cells is 1
-  - This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate
-- The results of this are stored in seu[["RNA"]]$scale.data
-- By default, only variable features are scaled.
-- You can specify the features argument to scale additional features
-
-```{r scale}
-seu <-
-  xfun::cache_rds({
-    ScaleData(seu)
-  }, file = "seu_scaled.rds", rerun = params$rerun)
 ```
 
 # Dimensionality reduction
@@ -215,18 +225,7 @@ An alternative heuristic method generates an ‘Elbow plot’: a ranking of prin
 
 ```{r elbow}
 ElbowPlot(seu)
-n_dims <- 10
-```
-
-## Clustering
-
-```{r clust}
-seu <-
-  xfun::cache_rds({
-    seu %>%
-      FindNeighbors(dims = 1:n_dims) %>%
-      FindClusters(resolution = 0.5)
-  }, file = "seu_clustered.rds", rerun = params$rerun)
+n_dims <- 8
 ```
 
 ## Non-linear dimensionality reduction (UMAP)
@@ -242,15 +241,89 @@ seu <-
   }, file = "seu_umap.rds", rerun = params$rerun)
 
 # dimplot
-DimPlot(seu, reduction = "umap")
+DimPlot(seu, reduction = "umap") & coord_equal()
 
 # violin plots of features per cluster
 VlnPlot(seu, features = c("nCount_RNA", "nFeature_RNA", "percent.mt"))
 ```
 
+## Clustering
+
+```{r clust}
+# find neighbours
+seu <- FindNeighbors(seu, dims = 1:n_dims)
+
+# try many resolutions
+resolutions <- seq(0.2, 1.2, 0.1)
+purrr::walk(resolutions, function(res) {
+  p <-
+    FindClusters(seu, resolution = res, dims = 1:n_dims) %>%
+    DimPlot() +
+    ggtitle(paste("resolution =", res)) +
+    coord_equal()
+  print(p)
+})
+
+# set a resolution
+resolution <- 1
+seu <-
+  xfun::cache_rds({
+    FindClusters(seu, resolution = resolution, dims = 1:n_dims)
+  }, file = "seu_clustered.rds", rerun = params$rerun)
+
+# final resolution
+DimPlot(seu) + ggtitle(paste("final resolution =", resolution))
+```
+
+## Remove doublets
+
+```{r doublets}
+# pK identification (no ground-truth)
+sweep_list <- paramSweep(seu, PCs = 1:n_dims)
+sweep_stats <- summarizeSweep(sweep_list, GT = FALSE)
+bcmvn <- find.pK(sweep_stats)
+optimal_pk <-
+  bcmvn %>%
+  dplyr::filter(BCmetric == max(BCmetric)) %>%
+  dplyr::pull(pK) %>%
+  as.numeric()
+
+# homotypic doublet proportion estimate (assuming 7.5% doublet formation rate)
+annotations <- seu$seurat_clusters
+homotypic_prop <- modelHomotypic(annotations)
+
+# multiply by number of cells to get the number of expected multiplets
+multiplet_rate <- 0.075
+n_exp_poi <- round(multiplet_rate * ncol(seu))
+n_exp_poi_adj <- round(n_exp_poi * (1 - homotypic_prop))
+
+# run DoubletFinder with varying classification stringencies
+seu <-
+  xfun::cache_rds({
+    seu <-
+      doubletFinder(seu, PCs = 1:n_dims, pK = optimal_pk, nExp = n_exp_poi_adj)
+    seu
+  }, file = "seu_doublets.rds", rerun = params$rerun)
+df_col <-
+  colnames(seu@meta.data)[grepl("DF.classifications", colnames(seu@meta.data))]
+
+# plot doublets
+DimPlot(seu, group.by = df_col) + coord_equal()
+
+# count doublets
+table(seu@meta.data[, df_col])
+
+# remove doublets
+seu <-
+  xfun::cache_rds({
+    seu <- seu[, seu@meta.data[, df_col] == "Singlet"]
+    seu
+  }, file = "seu_singlets.rds", rerun = params$rerun)
+```
+
 # Celltype annotation
 
-## Finding differentially expressed features
+## Differentially expressed features
 
 Seurat can help you find markers that define clusters via differential expression (DE). By default, it identifies positive and negative markers of a single cluster (specified in ident.1), compared to all other cells. FindAllMarkers() automates this process for all clusters, but you can also test groups of clusters vs. each other, or against all cells.
 
@@ -259,7 +332,8 @@ In Seurat v5, we use the presto package (as described here and available for ins
 ```{r markers}
 markers <-
   xfun::cache_rds({
-    FindAllMarkers(seu, only.pos = TRUE)
+    markers <- FindAllMarkers(seu, only.pos = TRUE)
+    markers
   }, file = "markers.rds", rerun = params$rerun)
 ```
 
@@ -292,9 +366,11 @@ thy_markers <-
 # add a module score for each of the marker sets
 seu <-
   xfun::cache_rds({
-    seu %>%
+    seu <-
+      seu %>%
       AddModuleScore(features = split(thy_markers$gene, thy_markers$celltype),
-                    name = paste0("module_", unique(thy_markers$celltype)))
+                     name = paste0("module_", unique(thy_markers$celltype)))
+    seu
   }, file = "seu_module_scores.rds", rerun = params$rerun)
 
 # prep dotplot of expression
@@ -342,10 +418,19 @@ seu@meta.data %>%
   theme_bw()
 ```
 
-## Getting labels from CellTypist
+## CellTypist
 
-`CellTypist` was run on the dataset using the `Immune_All_Low.pkl` model. We
-apply the annotations here.
+`CellTypist` was run on the dataset using the `Immune_All_Low.pkl` model.
+
+```{bash run_celltypist, eval = F}
+module load python-3.12.0/perl-5.38.0
+celltypist \
+  --indata out/trencadis-seq/celltypist/matrix.csv \
+  --model Immune_All_Low.pkl \
+  --outdir out/trencadis-seq/celltypist/
+```
+
+We apply the annotations here.
 
 ```{r celltypist, fig.height = 12, fig.width = 12}
 seu <-
@@ -359,7 +444,7 @@ seu <-
 
     # get annots
     ct_annots <-
-      "out/trencadis-seq/celltypist/predicted_labels.csv" %>%
+      "out/trencadis-seq/celltypist/20250801/predicted_labels.csv" %>%
       readr::read_csv() %>%
       dplyr::rename(barcode = `...1`) %>%
       dplyr::left_join(ct_labels)
@@ -391,7 +476,7 @@ DimPlot(seu, group.by = "celltypist_annot_fine", label = TRUE) +
   NoLegend()
 ```
 
-## Running SingleR
+## SingleR
 
 ```{r singler, fig.width = 12, fig.height = 12}
 # predict celltypes using HPCA
@@ -443,6 +528,7 @@ seu <-
 
     # return
     seu
+
   }, file = "seu_singler.rds", rerun = params$rerun)
 ```
 
@@ -482,7 +568,7 @@ DimPlot(seu, group.by = "singler_bpe_annot", label = TRUE) +
   NoLegend()
 ```
 
-### Alluvial plot of all annotations
+## Alluvial plot of all annotations
 
 We can visualise how cells are annotated across all methods using an alluvial
 plot.
@@ -497,7 +583,8 @@ dplyr::as_tibble(seu@meta.data) %>%
   ggalluvial::geom_stratum(alpha = 0.25) +
   geom_label(stat = "stratum", aes(label = after_stat(stratum))) +
   scale_x_discrete(limits = c("seurat_clusters", "singler_bpe_annot",
-                              "singler_hpca_annot_main", "celltypist_annot_main")) +
+                              "singler_hpca_annot_main",
+                              "celltypist_annot_main")) +
   theme(legend.position = "none")
 ```
 
@@ -510,7 +597,8 @@ CellTypist predictions, and the top SingleR predictions from each atlas.
 ```{r summ}
 ct_annot_summ <-
   xfun::cache_rds({
-    dplyr::as_tibble(seu@meta.data) %>%
+    seu@meta.data %>%
+      dplyr::as_tibble() %>%
       dplyr::group_by(seurat_clusters) %>%
       tidyr::pivot_longer(
         cols = c(celltypist_annot_main, celltypist_annot_fine,
@@ -522,9 +610,10 @@ ct_annot_summ <-
       dplyr::mutate(prop = n / n_cells,
                     prop_rank = rank(-prop, ties.method = "first"),
                     value = paste0(value, " (", 100 * round(prop, 3), "%)")) %>%
-      dplyr::filter(prop_rank == 1) %>%
+      dplyr::group_by(seurat_clusters, n_cells, name) %>%
+      dplyr::arrange(prop_rank) %>%
+      dplyr::summarise(value = paste(value, collapse = ", ")) %>%
       dplyr::ungroup() %>%
-      dplyr::transmute(seurat_clusters, name, value, n_cells) %>%
       tidyr::pivot_wider() %>%
       dplyr::mutate(prop_cells = n_cells / sum(n_cells)) %>%
       # add top 5 markers per cluster
@@ -545,8 +634,10 @@ ct_annot_summ <-
           dplyr::group_by(seurat_clusters, name) %>%
           dplyr::summarise(value = median(score)) %>%
           tidyr::pivot_wider() %>%
-          janitor::clean_names()
-      )
+          janitor::clean_names()) %>%
+      # reorder cols
+      dplyr::select(seurat_clusters, n_cells, prop_cells, n_count_rna,
+                    n_feature_rna, percent_mt, everything())
   }, file = "ct_annot_summ.rds", rerun = params$rerun)
 
 # write to tsv
@@ -568,6 +659,7 @@ cts <-
   dplyr::mutate(seurat_clusters = as.character(seurat_clusters))
 seu <-
   xfun::cache_rds({
+
     # add cluster celltype annotations
     seu$celltype <-
       tibble::tibble(seurat_clusters = as.character(seu$seurat_clusters)) %>%
@@ -579,7 +671,8 @@ seu <-
 
     # return
     seu
-  }, file = "seu_annotated.rds", rerun = TRUE)
+
+  }, file = "seu_annotated.rds", rerun = params$rerun)
 
 # plot final celltypes
 DimPlot(seu, group.by = "celltype", label = TRUE) +
