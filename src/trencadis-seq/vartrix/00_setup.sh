@@ -6,12 +6,12 @@ module load samtools-1.19.2
 module load IRODS/1.0
 
 # dirs
-data_dir=$LUSTRE_TEAM/projects/hashimoto_thyroiditis/data/vartrix/
+data_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/data/vartrix/
 ref_dir=$data_dir/reference/
 snps_dir=$data_dir/snps/
 tx_dir=$data_dir/TX/
 pb_dir=$data_dir/PB/
-out_dir=$LUSTRE_TEAM/projects/hashimoto_thyroiditis/out/vartrix/
+out_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/out/vartrix/
 mkdir -p $data_dir $ref_dir $snps_dir $tx_dir $pb_dir $out_dir
 
 # files

@@ -4,7 +4,8 @@
 library(magrittr)
 
 # dirs
-data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "projects/hashimoto_thyroiditis/data/bams/")
+data_dir <- file.path(Sys.getenv("LUSTRE_126"), "projects/hashimoto_thyroiditis/data/bams/")
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 
 # hard-code the run_id-to-plate conversion
 # "49686" = 1
@@ -43,15 +44,15 @@ manifests[["7761stdy_manifest_25654_041024"]] <-
 # fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_26013_211124_DNA"]] <-
   manifests[["7761stdy_manifest_26013_211124_DNA"]] %>%
-  dplyr::mutate(
-    supplier_sample_name = gsub("PD63118_", "PD63118_P3_", supplier_sample_name))
+  dplyr::mutate(supplier_sample_name = gsub("PD63118_", "PD63118_P3_",
+                                            supplier_sample_name))
 
 # run49900_lane2 (7761stdy_manifest_26014_211124_Hyb)
 # fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_26014_211124_Hyb"]] <-
   manifests[["7761stdy_manifest_26014_211124_Hyb"]] %>%
-  dplyr::mutate(
-    supplier_sample_name = gsub("PD63118_", "PD63118_P3_", supplier_sample_name))
+  dplyr::mutate(supplier_sample_name = gsub("PD63118_", "PD63118_P3_",
+                                            supplier_sample_name))
 
 # run49901_lane8 (7894stdy_manifest_26015_211124_RNA)
 # remove control (!= "1 cell") and low-yield (quant < 2) wells
@@ -90,7 +91,8 @@ manifest <-
 
 # read in sequencescape pool files
 seqscape <-
-  list.files("data/resolveome/sequencescape/", pattern = "tsv$", full.names = TRUE) %>%
+  list.files("data/resolveome/sequencescape/", pattern = "tsv$",
+             full.names = TRUE) %>%
   {purrr::set_names(., basename(.) %>% tools::file_path_sans_ext())} %>%
   purrr::map(readr::read_tsv) %>%
   dplyr::bind_rows(.id = "id") %>%

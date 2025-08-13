@@ -6,12 +6,12 @@ module load bcftools-1.9/python-3.11.6
 module load samtools-1.19.2
 
 # dirs
-data_dir=$LUSTRE_TEAM/projects/hashimoto_thyroiditis/data/vartrix/
+data_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/data/vartrix/
 ref_dir=$data_dir/reference/
 snps_dir=$data_dir/snps/
 tx_dir=$data_dir/TX/
 pb_dir=$data_dir/PB/
-out_dir=$LUSTRE_TEAM/projects/hashimoto_thyroiditis/out/vartrix/
+out_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/out/vartrix/
 
 # files
 vcf=$snps_dir/PD63118b_lo0044.v1.caveman_c.snps

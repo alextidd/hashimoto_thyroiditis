@@ -11,7 +11,7 @@
     --no_cell_barcodes \
     --fasta $REF_PATH/Homo_sapiens/GRCh38_full_analysis_set_plus_decoy_hla/genome.fa \
     -with-tower \
-    -w $LUSTRE_TEAM/projects/hashimoto_thyroiditis/work/nf-sc-geno/PB/ \
+    -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/nf-sc-geno/PB/ \
     -N at31@sanger.ac.uk \
     -resume
 )

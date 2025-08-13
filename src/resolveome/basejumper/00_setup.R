@@ -6,7 +6,7 @@ library(purrr)
 library(dplyr)
 
 # dirs
-data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "projects/hashimoto_thyroiditis/data/")
+data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/")
 fastq_dir <- file.path(data_dir, "/fastqs/reads")
 
 # read samplesheet

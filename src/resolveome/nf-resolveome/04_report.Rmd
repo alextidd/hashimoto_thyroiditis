@@ -82,7 +82,7 @@ man_insp <-
 
 # samplesheet
 ss <-
-  file.path(Sys.getenv("LUSTRE_TEAM"),
+  file.path(Sys.getenv("LUSTRE_125"),
             "projects/hashimoto_thyroiditis/data/bams/samplesheet_local.csv") %>%
   read_csv() %>%
   # add manual inspection data

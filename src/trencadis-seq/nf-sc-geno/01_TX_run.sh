@@ -10,7 +10,7 @@
     --out_dir ./ \
     --no_cell_barcodes \
     -with-tower \
-    -w $LUSTRE_TEAM/projects/hashimoto_thyroiditis/work/nf-sc-geno/TX/ \
+    -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/nf-sc-geno/TX/ \
     -N at31@sanger.ac.uk \
     -resume
 )

@@ -75,7 +75,7 @@ man_insp <-
          loh_9p = as.character(as.numeric(loh_9p)),
          loh_9q = as.character(as.numeric(loh_9q)))
 ss <-
-  file.path(Sys.getenv("LUSTRE_TEAM"),
+  file.path(Sys.getenv("LUSTRE_125"),
             "projects/hashimoto_thyroiditis/data/bams/samplesheet_local.csv") %>%
   read_csv() %>%
   # add manual inspection data

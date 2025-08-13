@@ -16,7 +16,7 @@ wd=$(pwd)
     --location local \
     --baf_chrs 1,4,9 \
     --out_dir ./ \
-    -w $LUSTRE_TEAM/projects/hashimoto_thyroiditis/work/nf-resolveome/dnahyb/ \
+    -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/nf-resolveome/dnahyb/ \
     -resume \
     -N at31@sanger.ac.uk \
     -with-tower

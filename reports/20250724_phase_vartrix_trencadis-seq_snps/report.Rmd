@@ -45,10 +45,10 @@ source("bin/utils.R")
 
 # dirs
 vartrix_data_dir <-
-  file.path(Sys.getenv("LUSTRE_TEAM"),
+  file.path(Sys.getenv("LUSTRE_125"),
             "projects/hashimoto_thyroiditis/data/vartrix/")
 vartrix_out_dir <-
-  file.path(Sys.getenv("LUSTRE_TEAM"),
+  file.path(Sys.getenv("LUSTRE_125"),
             "projects/hashimoto_thyroiditis/out/vartrix/")
 ```
 
@@ -130,7 +130,7 @@ Now, we load the SNPs and order them in the same way as in the matrices.
 Sys.setenv("VROOM_CONNECTION_SIZE" = "5000000")
 snps <-
   file.path(
-    Sys.getenv("LUSTRE_TEAM"), "projects/hashimoto_thyroiditis/data",
+    Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data",
     "vartrix/snps/PD63118b_lo0044.v1.caveman_c.snps.1p_nochr.vcf.gz") %>%
   gzfile() %>%
   readr::read_tsv(comment = "##") %>%

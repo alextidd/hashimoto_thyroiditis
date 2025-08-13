@@ -25,7 +25,9 @@ knitr::opts_chunk$set(
   cache.path = params$cache_path,
   fig.align = "center"
 )
+```
 
+```{r setup2, include = FALSE}
 # libraries
 library(knitr)
 library(magrittr)
@@ -44,7 +46,7 @@ plot_baf <- function(p_dat) {
     filter(total_depth > 4) %>%
     dplyr::mutate(mut_baf = 1 - mut_vaf,
                   chr = factor(sub("^chr", "", chr),
-                              levels = c(as.character(1:22), "X", "Y")),
+                               levels = c(as.character(1:22), "X", "Y")),
                   `pos (Mb)` = pos / 1e6) %>%
     tidyr::pivot_longer(cols = c("mut_vaf", "mut_baf"), names_to = "vaf_type")
 
@@ -109,10 +111,10 @@ loh_snps <-
   split(.$id)
 
 # save
-saveRDS(loh_snps, "out/phase_snps/loh_genotyped_chr1_snps.rds")
+saveRDS(loh_snps, "out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
 ```
 
-```{r reload_snps}
+```{r reload_plate3_wellA2_snps}
 loh_snps <- readRDS("out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
 ```
 
@@ -180,7 +182,7 @@ Next, we attempt to identify the breakpoints in each case.
 
 ```{r id_breakpoints, fig.height = 10, fig.width = 25}
 # 36652068 as breakpoint for plate10_wellA10 (n = 13341)
-# define whether you care about 1 or -1 (based on hap A or B)
+# define whether you care about 1 or -1 (based on hap A or B present)
 # find the first position at which the rolling average delta is > -0.9 or < 0.9
 # take the snp one before that
 # plot a red dotted line and record the position of the breakpoint
@@ -236,10 +238,44 @@ purrr::walk2(names(phased_loh_snps), phased_loh_snps, function(id_i, i) {
     # make y limits 0 and 1
     scale_y_continuous(limits = c(-1, 1)) +
     scale_x_continuous(limits = c(min(i$pos / 1e6), max(i$pos / 1e6)),
-                        expand = c(0, 0)) +
+                       expand = c(0, 0)) +
     ggtitle(paste0("breakpoint = ", breakpoint))
   p <- p1 / p2
   print(p)
 
+  # save breakpoint and present haplotype
+  breakpoints_and_haps[[id_i]] <<-
+    tibble::tibble(breakpoint = breakpoint, present_haplotype = present_hap)
+
 })
+```
+
+Now, we plot the breakpoints for each cell.
+
+```{r plot_breakpoints, fig.height = 8}
+# convert breakpoints to tibble
+breakpoints_and_haps <-
+  bind_rows(breakpoints_and_haps, .id = "id")
+
+# load the established clades
+clades <-
+  "data/resolveome/shared_clades/shared_clades.tsv" %>%
+  readr::read_tsv()
+
+# plot breakpoints
+breakpoints_and_haps %>%
+  mutate(cell_id = gsub("_dna.*", "", id)) %>%
+  left_join(clades) %>%
+  ggplot(aes(x = reorder(cell_id, -breakpoint), y = breakpoint / 1e6,
+             fill = clade)) +
+  geom_col() +
+  geom_text(aes(label = present_haplotype), nudge_y = 1.5) +
+  geom_hline(yintercept = 2487078 / 1e6, colour = "green") +
+  theme_classic() +
+  labs(x = "", y = "chr1p breakpoint (Mb)") +
+  guides(x = guide_axis(angle = -90))
+
+# save breakpoints
+breakpoints %>%
+  readr::write_tsv(file.path(cache_path, "breakpoints.tsv"))
 ```

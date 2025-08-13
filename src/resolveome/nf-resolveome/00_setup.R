@@ -38,7 +38,7 @@ type_mutations <- function(df) {
 
 # dirs
 wd <- getwd()
-data_dir <- file.path(Sys.getenv("LUSTRE_TEAM"), "projects/hashimoto_thyroiditis/data/bams/")
+data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/bams/")
 out_dir <- file.path(wd, "out/resolveome/nf-resolveome/muts_and_snps/")
 dir.create(out_dir, recursive = TRUE)
 
@@ -58,7 +58,7 @@ common_snps <-
 # extract common snps that are heterozygous
 # 0.3 < VAF < 0.7 and DP > 50
 # PD63118b_lo0044 has the highest coverage according to picard (68X)
-# PD66718b_lo0041 has the highest coverage according to CanApps calculated cov
+# PD66718b_lo0041 has the highest coverage according to picard (107X)
 caveman_snps <-
   c("PD66718" = "/lustre/scratch124/casm/references/nst_links/live/3438/PD66718b_lo0041/PD66718b_lo0041.caveman_c.snps.vcf.gz",
     "PD63118" = "/nfs/irods-cgp-sr12-sdc/intproj/3464/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz") %>%
