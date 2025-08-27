@@ -40,7 +40,7 @@ type_mutations <- function(df) {
 wd <- getwd()
 data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/bams/")
 out_dir <- file.path(wd, "out/resolveome/nf-resolveome/muts_and_snps/")
-dir.create(out_dir, recursive = TRUE)
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # samplesheet
 ss_bams <-

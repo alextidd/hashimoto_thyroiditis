@@ -6,14 +6,15 @@ module load IRODS/1.0
 
 # run (dna only for now)
 (
-  cd $LUSTRE_126/projects/hashimoto_thyroiditis/data/bams/
+  cd $LUSTRE_125/projects/hashimoto_thyroiditis/data/bams/
   nextflow run $NFS_TEAM/nextflow/nf-get_bam \
     --samplesheet samplesheet_irods.csv \
+    --fasta $REF_PATH/Homo_sapiens/GRCh37d5/genome.fa \
     --location irods \
     --out_dir ./ \
-    --cram_to_bam \
     -resume \
     -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/get_bams/ \
-    -N at31@sanger.ac.uk
-    # --merge_bams 
+    -N at31@sanger.ac.uk \
+    --cram_to_bam
+    # --merge_bams
 )

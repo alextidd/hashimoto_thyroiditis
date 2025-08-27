@@ -10,7 +10,7 @@ data_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/data/vartrix/
 ref_dir=$data_dir/reference/
 snps_dir=$data_dir/snps/
 tx_dir=$data_dir/TX/
-pb_dir=$data_dir/PB/
+pb_dir=$data_dir/PB/PD63118b/
 out_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/out/vartrix/
 mkdir -p $data_dir $ref_dir $snps_dir $tx_dir $pb_dir $out_dir
 
@@ -68,26 +68,44 @@ sed 's/^>chr/>/' $fasta > $ref_dir/genome_nochr.fa
 samtools faidx $ref_dir/genome_nochr.fa
 
 # 10X: get barcodes and bams
-tx_dirs=(cellranger720_count_49200_7613STDY14897605_GRCh38-3_0_0 cellranger720_count_49200_7613STDY14897606_GRCh38-3_0_0)
-sample_ids=(PD63118b_st0001_rna PD63118b_st0002_rna)
-for dir in "${tx_dirs[@]}"; do
+cb_dir=/lustre/scratch126/casm/teams/team268/yi1/Hashi_10x/cellbender/
+cb_dirs=(7613STDY14897605/7613STDY14897605_cell_barcodes.csv 7613STDY14897606_run3/7613STDY14897606_cell_barcodes.csv)
+cr_dirs=(cellranger720_count_49200_7613STDY14897605_GRCh38-3_0_0 cellranger720_count_49200_7613STDY14897606_GRCh38-3_0_0)
+sample_ids=(PD63118b_st0001 PD63118b_st0002)
+for i in "${!cr_dirs[@]}"; do
 
-  echo $dir
+  echo "Processing sample: ${sample_ids[$i]}"
+  echo "Cellranger directory: ${cr_dirs[$i]}"
+  echo "Cellbender directory: ${cb_dirs[$i]}"
+  tx_dir_i=$tx_dir/${sample_ids[$i]}
+  mkdir -p $tx_dir_i
 
   # directories
-  irods_dir=/seq/illumina/runs/49/49200/cellranger/$dir
-  bc_dir=$tx_dir/$dir/filtered_feature_bc_matrix/
+  irods_dir=/seq/illumina/runs/49/49200/cellranger/${cr_dirs[$i]}
 
-  # get barcodes
-  mkdir -p $bc_dir
-  iget -K \
-    /seq/illumina/runs/49/49200/cellranger/$dir/filtered_feature_bc_matrix/barcodes.tsv.gz \
-    $bc_dir
-  
+  # get cellranger barcodes
+  for cr_lvl in filtered raw ; do
+
+    # dir
+    cr_dir_i=$tx_dir_i/barcodes/cellranger_${cr_lvl}/
+    mkdir -p $cr_dir_i
+
+    # get barcodes
+    iget -K \
+      $irods_dir/${cr_lvl}_feature_bc_matrix/barcodes.tsv.gz \
+      $cr_dir_i
+
+  done
+
+  # get cellbender barcodes
+  cb_dir_i=$tx_dir_i/barcodes/cellbender/
+  mkdir -p $cb_dir_i
+  cat $cb_dir/${cb_dirs[$i]} | gzip > $cb_dir_i/barcodes.tsv.gz
+
   # stage and index bam (grch38)
-  bam=/seq/illumina/runs/49/49200/cellranger/$dir/possorted_genome_bam.bam
-  iget -K $bam $tx_dir/$dir/
-  iget -K $bam.bai $tx_dir/$dir/
+  bam=/seq/illumina/runs/49/49200/cellranger/${cr_dirs[$i]}/possorted_genome_bam.bam
+  iget -K $bam $tx_dir_i
+  iget -K $bam.bai $tx_dir_i
 
 done
 

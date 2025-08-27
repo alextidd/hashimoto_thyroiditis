@@ -57,6 +57,16 @@ knitr::opts_chunk$set(
     "/nf-trencadis-seq_thyroid_annotate_celltypes_cache/html/"))
 ```
 
+# Parameters
+
+```{r params, echo = FALSE}
+params %>%
+  tibble::enframe() %>%
+  knitr::kable()
+```
+
+# Data
+
 First, we must move the cellranger h5 objects from IRODS to `nfs`.
 
 ```{bash iget_h5, eval = F}

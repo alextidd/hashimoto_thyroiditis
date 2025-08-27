@@ -74,7 +74,7 @@ impact_colours <- c("Missense" = "#5f9fa0",
 # load manual inspection data
 man_insp <-
   read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
-  dplyr::select(-run_id) %>%
+  select(-run_id) %>%
   # fix loh_1p
   mutate(loh_1p = as.character(as.numeric(loh_1p)),
          loh_9p = as.character(as.numeric(loh_9p)),
@@ -200,7 +200,7 @@ cov <-
       purrr::map(read_tsv) %>%
       bind_rows(.id = "id") %>%
       dplyr::rename(chr = chrom) %>%
-      left_join(ss %>% dplyr::select(id, seq_type)) %>%
+      left_join(ss %>% select(id, seq_type)) %>%
       filter(chr == "total" & seq_type == "dna" |
              chr == "total_region" & seq_type == "dnahyb") %>%
       transmute(id, name = "mean coverage", value = mean)
@@ -214,7 +214,7 @@ dist <-
       split(mosdepth$dist, mosdepth$id) %>%
       purrr::map(read_tsv, col_names = c("chr", "cov", "prop")) %>%
       bind_rows(.id = "id") %>%
-      dplyr::filter(chr == "total") %>%
+      filter(chr == "total") %>%
       inner_join(ss_annot)
     dist
   }, file = "dist.rds", rerun = params$rerun)
@@ -224,6 +224,12 @@ perc_cov <-
   dist %>%
   filter(cov == 1) %>%
   transmute(id, name = "% genome covered", value = 100 * prop)
+```
+
+## Copy number profiles
+
+```{r plot_ginkgo}
+
 ```
 
 ## Coverage distribution
@@ -241,10 +247,10 @@ dist %>%
 
 ## Allelic balance of coverage
 
-```{r heterozygosity, eval = params$rerun}
+```{r heterozygosity}
 # get genotyped snps
 snps <-
-  c("dnahyb") %>% # c("dna", "dnahyb") %>%
+  c("dna", "dnahyb") %>%
   purrr::set_names() %>%
   purrr::map(~
     read_tsv(file.path("out/resolveome/nf-resolveome", .x, "PD63118/genotyping",
@@ -256,37 +262,55 @@ snps <-
 
 # get binned vafs and depths
 p_snps_dat <-
-  snps %>%
-  dplyr::mutate(
-    mut_vaf = ifelse(total_depth == 0, 0, mut_vaf),
-    total_depth_bin = cut(
-      total_depth, breaks = c(-Inf, 0, 10, 20, 50, 100, Inf),
-      labels = c("0", "<10", "10–20", "20–50", "50–100", ">100")),
-    mut_vaf_bin = cut(mut_vaf, breaks = seq(0, 1, length.out = 30 + 1),
-                      include.lowest = TRUE),
-    mut_vaf_min = stringr::str_extract(mut_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
-    mut_vaf_high = as.numeric(stringr::str_extract(mut_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
-    mut_vaf_mid = (mut_vaf_min + mut_vaf_high) / 2) %>%
-  dplyr::count(mut_vaf_bin, mut_vaf_mid, total_depth_bin)
-saveRDS(p_snps_dat, "reports/20250709_resolveome_plots_cache/p_snps_dat.rds")
+  xfun::cache_rds({
+    snps %>%
+      mutate(
+        mut_vaf = ifelse(total_depth == 0, 0, mut_vaf),
+        total_depth_bin = cut(
+          total_depth, breaks = c(-Inf, 0, 10, 20, 50, 100, Inf),
+          labels = c("0", "<10", "10–20", "20–50", "50–100", ">100")),
+        mut_vaf_bin = cut(mut_vaf, breaks = seq(0, 1, length.out = 30 + 1),
+                          include.lowest = TRUE),
+        mut_vaf_min = stringr::str_extract(mut_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
+        mut_vaf_high = as.numeric(stringr::str_extract(mut_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
+        mut_vaf_mid = (mut_vaf_min + mut_vaf_high) / 2) %>%
+      dplyr::count(mut_vaf_bin, mut_vaf_mid, total_depth_bin)
+  }, file = "p_snps_dat.rds", rerun = params$rerun)
 
 # calculate allelic statuses
 allelic_statuses <-
-  snps %>%
-  mutate(allelic_status = case_when(
-    ref_depth > 0 & mut_depth > 0 ~ "both",
-    ref_depth > 0 & mut_depth == 0 ~ "one",
-    ref_depth == 0 & mut_depth > 0 ~ "one",
-    ref_depth == 0 & mut_depth == 0 ~ "neither")) %>%
-  dplyr::count(id, allelic_status) %>%
-  group_by(seq_type, id) %>%
-  mutate(n_snps = sum(n), prop = n / n_snps)
-saveRDS(allelic_statuses, "reports/20250709_resolveome_plots_cache/allelic_statuses.rds")
+  xfun::cache_rds({
+    snps %>%
+      mutate(allelic_status = case_when(
+        ref_depth > 0 & mut_depth > 0 ~ "both",
+        ref_depth > 0 & mut_depth == 0 ~ "one",
+        ref_depth == 0 & mut_depth > 0 ~ "one",
+        ref_depth == 0 & mut_depth == 0 ~ "neither")) %>%
+      dplyr::count(id, allelic_status) %>%
+      group_by(seq_type, id) %>%
+      mutate(n_snps = sum(n), prop = n / n_snps)
+  }, file = "allelic_statuses.rds", rerun = params$rerun)
 ```
 
+We plot the VAFs of germline heterozygous SNPs across the genome.
+
+```{r plot_allelic_vaf, fig.height = 8}
+# get rolling average mut vaf for every 100 snps
+snps %>%
+  filter(id == "plate10_wellA10_dna_run50382", seq_type == "dna", chr %in% c("22")) %>%
+  ggplot(aes(x = pos, y = mut_vaf)) +
+  geom_hline(yintercept = 0.5, colour = "grey") +
+  ggpointdensity::geom_pointdensity() +
+  scale_x_continuous(expand = c(0, 0)) +
+  # remove padding between facets
+  theme(panel.spacing = unit(0, "lines")) +
+  facet_grid(~ chr, scales = "free_x")
+dev.off()
+```
+
+We plot the VAF distribution of germline heterozygous SNPs.
+
 ```{r plot_allelic_vaf_dist, fig.height = 8}
-p_snps_dat <-
-  readRDS("reports/20250709_resolveome_plots_cache/p_snps_dat.rds")
 p_snps_dat %>%
   ggplot(aes(x = mut_vaf_mid, y = n, fill = total_depth_bin)) +
   geom_col() +
@@ -300,7 +324,7 @@ p_snps_dat %>%
 p_snps_dat <-
   snps %>%
   filter(id == "plate10_wellA7_dnahyb_run50227") %>%
-  dplyr::mutate(
+  mutate(
     mut_vaf = ifelse(total_depth == 0, 0, mut_vaf),
     total_depth_bin = cut(
       total_depth, breaks = c(-Inf, 0, 10, 20, 50, 100, Inf),
@@ -540,12 +564,12 @@ genos <-
     read_tsv(genos) %>%
       mutate(donor_id = donor_id) %>%
       # convert id -> cell_id
-      inner_join(ss %>% dplyr::select(id, cell_id)) %>%
-      dplyr::select(-id)
+      inner_join(ss %>% select(id, cell_id)) %>%
+      select(-id)
   }) %>%
   # pile up
   bind_rows() %>%
-  dplyr::select(-mut_vaf) %>%
+  select(-mut_vaf) %>%
   group_by(across(-matches("_depth$"))) %>%
   summarise(across(matches("_depth$"), \(x) sum(x, na.rm = TRUE))) %>%
   ungroup() %>%
@@ -663,7 +687,7 @@ cooccur <-
             `CD274 mut` = any(gene == "CD274")) %>%
   left_join(
     ss_annot %>%
-      dplyr::transmute(cell_id,
+      transmute(cell_id,
                        `1p LOH` = as.logical(as.numeric(loh_1p)),
                        `9p LOH` = as.logical(as.numeric(loh_9p))) %>%
       distinct()) %>%
@@ -787,7 +811,7 @@ p_dat %>%
   mutate(name = factor(name, levels = c("n NanoSeq mutations per gene", "n ResolveOME mutations per gene", "% of activated B cells with a driver")),
          impact = factor(impact, levels = c(names(impact_colours), "n"))) %>%
   right_join(
-    p_dat$`% of activated B cells with a driver` %>% dplyr::select(gene, prop = n)) %>%
+    p_dat$`% of activated B cells with a driver` %>% select(gene, prop = n)) %>%
   ggplot(aes(x = reorder(gene, -prop), y = n, fill = impact)) +
   geom_col(position = "stack") +
   theme_minimal() +
@@ -988,7 +1012,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
     unlist() %>%
     tibble::as_tibble() %>%
     distinct() %>%
-    dplyr::transmute(chr = seqnames, pos_37 = start, pos) %>%
+    transmute(chr = seqnames, pos_37 = start, pos) %>%
     inner_join(bj_muts_per_seq_type_38) %>%
     mutate(pos = pos_37, mut_id = paste(chr, pos, ref, alt, sep = "_")) %>%
     select(-pos_37)
@@ -1004,7 +1028,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
                        max_coding_muts_per_sample = Inf) %>%
         {.$annotmuts} %>%
         mutate(chr = paste0("chr", chr)) %>%
-        dplyr::select(-sampleID) %>%
+        select(-sampleID) %>%
         # collapse annotations on overlapping genes
         group_by(across(-c(gene, pid))) %>%
         summarise(gene = paste(sort(unique(gene)), collapse = ", "),
@@ -1388,9 +1412,9 @@ expr <-
   rename_with(~ stringr::str_replace(., "_rna_.*", ""))
 expr_counts <-
   expr %>%
-  dplyr::select(gene_id, gene_symbol, any_of(cells$sample_id)) %>%
+  select(gene_id, gene_symbol, any_of(cells$sample_id)) %>%
   column_to_rownames(var = "gene_id") %>%
-  dplyr::select(-gene_symbol)
+  select(-gene_symbol)
 
 # ensure order of sample IDs matches
 cells <-
@@ -1415,7 +1439,7 @@ res <-
   results(dds, contrast = c("condition", "1", "0")) %>%
   as_tibble(rownames = "gene") %>%
   arrange(padj) %>%
-  left_join(expr %>% dplyr::select(gene = gene_id, gene_symbol)) %>%
+  left_join(expr %>% select(gene = gene_id, gene_symbol)) %>%
   mutate(direction = ifelse(log2FoldChange > 0, "upregulated", "downregulated"))
 significant_genes <-
   res %>%

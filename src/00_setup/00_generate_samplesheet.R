@@ -4,7 +4,7 @@
 library(magrittr)
 
 # dirs
-data_dir <- file.path(Sys.getenv("LUSTRE_126"), "projects/hashimoto_thyroiditis/data/bams/")
+data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/bams/")
 dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 
 # hard-code the run_id-to-plate conversion

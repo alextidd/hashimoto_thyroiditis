@@ -41,6 +41,7 @@ library(rtracklayer)
 library(ggplot2)
 library(data.table)
 library(patchwork)
+library(Seurat)
 source("bin/utils.R")
 
 # dirs
@@ -200,7 +201,8 @@ purrr::walk2(names(mats_filter), mats_filter, function(sample, x) {
     # reorder and fill in missing barcodes
     missing <- setdiff(barcodes_filter, colnames(m))
     if (length(missing) > 0) {
-      zero_mat <- Matrix(0, nrow = nrow(m), ncol = length(missing), sparse = TRUE)
+      zero_mat <- Matrix(0, nrow = nrow(m), ncol = length(missing),
+                         sparse = TRUE)
       colnames(zero_mat) <- missing
       rownames(zero_mat) <- rownames(m)
       m <- cbind(m, zero_mat)
@@ -336,22 +338,21 @@ n_total_muts <-
   format(big.mark = ",", scientific = FALSE)
 
 # plot
+bin_int <- 0.05
 mat_long %>%
   dplyr::mutate(
-    alt_vaf_bin = cut(alt_vaf, breaks = seq(0, 1, length.out = 30 + 1),
-                      include.lowest = TRUE),
-    alt_vaf_min = stringr::str_extract(alt_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
-    alt_vaf_high = as.numeric(stringr::str_extract(alt_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
-    alt_vaf_mid = (alt_vaf_min + alt_vaf_high) / 2) %>%
+    alt_vaf_bin = cut(alt_vaf, breaks = seq(0, 1, by = bin_int),
+                      include.lowest = TRUE, labels = FALSE),
+    alt_vaf_mid = ((alt_vaf_bin - 1) * bin_int + alt_vaf_bin * bin_int) / 2) %>%
   dplyr::count(alt_vaf_bin, alt_vaf_mid, total_depth) %>%
   ggplot(aes(x = alt_vaf_mid, y = n, fill = total_depth)) +
   geom_col() +
   viridis::scale_fill_viridis() +
   theme_classic() +
   labs(title = "distribution of VAFs",
-                subtitle = paste(n_total_muts, "total mutations,",
-                                 n_unique_muts, "unique mutations"),
-        x = "VAF bin", y = "n mutations") +
+       subtitle = paste(n_total_muts, "total mutations,",
+                        n_unique_muts, "unique mutations"),
+       x = "VAF bin", y = "n mutations") +
   lims(x = c(0, 1)) +
   scale_y_continuous(expand = c(0, 0))
 ```
@@ -359,7 +360,6 @@ mat_long %>%
 We plot their haplotype A VAFs, sorted by mean haplotype A VAF.
 
 ```{r plot_vafs, fig.height = 8}
-# plot
 c("alt_vaf_A", "alt_vaf", "total_depth") %>%
   purrr::walk(function(type) {
     p1 <-
@@ -474,11 +474,29 @@ p2 <-
 How many cells have at least 10 reads across 1p?
 
 ```{r count_cells_10_reads}
-mat_long %>%
+p_dat <-
+  mat_long %>%
   group_by(barcode, celltype) %>%
-  summarise(total_depth_1p = sum(total_depth)) %>%
+  summarise(total_depth_1p = sum(total_depth), .groups = "drop")
+
+# total depth per barcode
+p_dat %>%
+  ggplot(aes(x = total_depth_1p)) +
+  geom_histogram(binwidth = 1) +
+  ggtitle("total depth per barcode")
+
+# total depth per barcode per celltype
+p_dat %>%
   ggplot(aes(x = total_depth_1p)) +
   geom_histogram() +
+  geom_text(
+    data = p_dat %>%
+      mutate(x = max(total_depth_1p * 0.9), y = Inf) %>%
+      group_by(celltype, x, y) %>%
+      summarise(n_cells_10_reads = sum(total_depth_1p >= 10)),
+    aes(x = x, y = y, label = paste0(n_cells_10_reads, " cells w 10+ reads")),
+    vjust = 2, hjust = 1) +
   geom_vline(xintercept = 10) +
-  facet_wrap(~ celltype)
+  facet_wrap(~ celltype) +
+  ggtitle("total depth per barcode per celltype")
 ```

@@ -12,3 +12,4 @@ figure-html/
 *_cache/
 reports/*/*/*.html
 reports/*/*/*.md
+*.rds

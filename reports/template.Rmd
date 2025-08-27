@@ -26,7 +26,22 @@ knitr::opts_chunk$set(
   cache.path = params$cache_path,
   fig.align = "center"
 )
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
 
 # set ggplot presets
-ggplot2::theme_set(ggplot2::theme_classic())
+theme_set(theme_classic())
+```
+
+# Parameters
+
+```{r params, echo = FALSE}
+params %>%
+  tibble::enframe() %>%
+  knitr::kable()
 ```

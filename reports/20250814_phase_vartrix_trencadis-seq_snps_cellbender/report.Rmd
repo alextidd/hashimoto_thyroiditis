@@ -1,0 +1,229 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+# set knitr options
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
+
+# set ggplot presets
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(Matrix)
+library(dplyr)
+library(GenomicRanges)
+library(rtracklayer)
+library(ggplot2)
+library(data.table)
+library(patchwork)
+library(Seurat)
+source("bin/utils.R")
+
+# dirs
+vartrix_data_dir <-
+  file.path(Sys.getenv("LUSTRE_125"),
+            "projects/hashimoto_thyroiditis/data/vartrix/")
+vartrix_out_dir <-
+  file.path(Sys.getenv("LUSTRE_125"),
+            "projects/hashimoto_thyroiditis/out/vartrix/")
+```
+
+VarTrix was run on the 10X and PacBio Trencadis-Seq BAMs to genotype 1p SNPs
+that have been phased, to look for cells with evidence of 1p loss. We will
+now use the output to call the haplotypes of 1p variants in the cells and to
+determine whether there is sufficient evidence to call 1p loss.
+
+We load the VarTrix output for the 10X BAMs.
+
+```{r load_data}
+# list of vartrix outputs and barcode files
+vt_dir <- file.path(vartrix_out_dir, "TX", "cellbender")
+vt_dirs <-
+  list.files(vt_dir) %>%
+  purrr::set_names() %>%
+  purrr::map(function(sample) {
+    file.path(vt_dir, sample)
+  })
+
+# get matrices
+mats <- list()
+purrr::walk2(names(vt_dirs), vt_dirs, function(sample_i, sample_dir) {
+
+  # load barcodes and suffix to avoid duplicates
+  barcodes <- readLines(file.path(sample_dir, "barcodes.tsv"))
+  barcodes_i <- paste0(barcodes, "_", sample_i)
+
+  # load variants and correct positions (+1)
+  vars <- readLines(file.path(sample_dir, "variants.txt"))
+  chrs <- gsub("_.*", "", vars) %>% gsub("chr", "", .)
+  positions_plus_1 <- gsub(".*_", "", vars) %>% as.numeric() %>% {. + 1}
+  vars_plus_1 <- paste0(chrs, "_", positions_plus_1)
+
+  # load matrices
+  mats[[sample_i]] <<-
+    c("alt", "ref") %>%
+    purrr::set_names() %>%
+    purrr::map(function(x) {
+
+      # load matrix
+      mat <- readMM(file.path(sample_dir, paste0(x, ".mtx")))
+      dimnames(mat) <- list(vars_plus_1, barcodes_i)
+      mat
+
+    })
+})
+```
+
+Now, we load the SNPs and order them in the same way as in the matrices.
+
+```{r load_snps}
+Sys.setenv("VROOM_CONNECTION_SIZE" = "5000000")
+snps <-
+  file.path(
+    Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data",
+    "vartrix/snps/PD63118b_lo0044.v1.caveman_c.snps.1p_nochr.vcf.gz") %>%
+  gzfile() %>%
+  readr::read_tsv(comment = "##") %>%
+  transmute(chr = as.character(`#CHROM`), pos = POS, ref = REF, alt = ALT)
+mat_snps <-
+  tibble::tibble(chr_pos = rownames(mats[[1]][[1]])) %>%
+  tidyr::separate_wider_delim(cols = "chr_pos", delim = "_",
+                              names = c("chr", "pos"), cols_remove = FALSE) %>%
+  mutate(pos = as.numeric(pos)) %>%
+  left_join(snps)
+```
+
+How many cells have any reads at SNP sites per sample?
+
+```{r summary_stats}
+mats %>%
+  purrr::map(function(i) {
+    cell_cov <- Matrix::colSums(i$alt) + Matrix::colSums(i$ref)
+    sum(cell_cov > 0)
+  })
+```
+
+Now, we concatenate the matrices.
+
+```{r sum_matrices}
+# concatenate matrices
+mats_comb <-
+  list(ref = do.call(cbind, lapply(mats, `[[`, "ref")),
+       alt = do.call(cbind, lapply(mats, `[[`, "alt")))
+
+# calculate vafs and total depths
+mat_calc <-
+  list(alt_vaf = mats_comb$alt / (mats_comb$alt + mats_comb$ref),
+       alt_depth = mats_comb$alt,
+       ref_depth = mats_comb$ref,
+       total_depth = mats_comb$alt + mats_comb$ref)
+
+# we subset to informative positions with any coverage in any cell
+mat_calc <-
+  purrr::map(mat_calc, ~ .x[rowSums(mat_calc$total_depth) > 0, ])
+```
+
+Now, we can call the haplotypes of the 1p variants in the cells.
+
+```{r call_haplotypes}
+# load grch37 snps
+phased_snps_grch37 <-
+  readRDS("out/phase_snps/phase_snps_cache/plate3_wellA2_phased_snps.rds") %>%
+  dplyr::rename(pos_grch37 = pos)
+
+# lift over to grch38
+phased_snps <-
+  phased_snps_grch37 %>%
+  {GRanges(
+    seqnames = paste0("chr", .$chr),
+    ranges = IRanges(start = .$pos_grch37, end = .$pos_grch37),
+    pos_grch37 = .$pos_grch37)} %>%
+  liftOver(import.chain("../../reference/liftover/hg19ToHg38.over.chain")) %>%
+  unlist() %>%
+  tibble::as_tibble() %>%
+  transmute(chr = gsub("chr", "", seqnames), pos = start, pos_grch37,
+            chr_pos = paste0(chr, "_", pos)) %>%
+  left_join(phased_snps_grch37) %>%
+  # phased snps only + only those in the matrix
+  filter(!is.na(hap_A_type),
+         chr_pos %in% rownames(mat_calc$alt_vaf))
+
+# subset vaf matrix to phased snps
+mat_calc_phased <- purrr::map(mat_calc, ~ .x[phased_snps$chr_pos, ])
+
+# update phased snps to match matrix order
+phased_snps <-
+  left_join(tibble::tibble(chr_pos = rownames(mat_calc_phased$alt_vaf)),
+            phased_snps)
+
+# flip VAF (ie 1 - VAF) where hap A == "ref", to get VAFs of hap A for all cells
+mat_calc_phased$alt_vaf_A <- mat_calc_phased$alt_vaf
+mat_calc_phased$alt_vaf_A[phased_snps$hap_A_type == "ref", ] <-
+  1 - mat_calc_phased$alt_vaf_A[phased_snps$hap_A_type == "ref", ]
+```
+
+We look at those sites with any reads.
+
+```{r mat_long}
+mat_long <-
+  xfun::cache_rds({
+    mat_calc_phased %>%
+      purrr::map(function(m) {
+
+        # get all possible combinations
+        all_combinations <- expand.grid(
+          chr_pos = rownames(m),
+          barcode = colnames(m),
+          stringsAsFactors = FALSE
+        )
+
+        # get non-zero entries from sparse matrix
+        mat_triplet <- as(m, "TsparseMatrix")
+        nonzero_entries <- data.table(
+          chr_pos = rownames(m)[mat_triplet@i + 1],
+          barcode = colnames(m)[mat_triplet@j + 1],
+          value = mat_triplet@x
+        )
+
+        # merge to include zeros
+        all_combinations %>%
+          left_join(nonzero_entries, by = c("chr_pos", "barcode")) %>%
+          mutate(value = ifelse(is.na(value), 0, value))
+
+      }) %>%
+      bind_rows(.id = "name") %>%
+      tidyr::pivot_wider() %>%
+      # filter out sites with no reads
+      filter(total_depth > 0) %>%
+      left_join(phased_snps) %>%
+      # order by index
+      group_by(barcode) %>%
+      arrange(chr, pos) %>%
+      mutate(i = row_number(), mean_alt_vaf_A = mean(alt_vaf_A), n = n())
+  }, file = "mat_long.rds", rerun = params$rerun)
+```

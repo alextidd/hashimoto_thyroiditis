@@ -10,7 +10,7 @@ data_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/data/vartrix/
 ref_dir=$data_dir/reference/
 snps_dir=$data_dir/snps/
 tx_dir=$data_dir/TX/
-pb_dir=$data_dir/PB/
+pb_dir=$data_dir/PB/PD63118b/
 out_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/out/vartrix/
 
 # files
@@ -20,54 +20,60 @@ fasta_nochr=$ref_dir/genome_nochr.fa
 
 echo "run vartrix on the 10X"
 sample_ids=(PD63118b_st0001 PD63118b_st0002)
-tx_dirs=(cellranger720_count_49200_7613STDY14897605_GRCh38-3_0_0 cellranger720_count_49200_7613STDY14897606_GRCh38-3_0_0)
-for i in ${!sample_ids[@]} ; do
+for sample_id in ${sample_ids[@]} ; do
 
-  echo "sample_id: ${sample_ids[$i]}"
-  echo "tx_dir: ${tx_dirs[$i]}"
+  echo "sample_id: $sample_id"
 
-  # create dir
-  out_dir_i=$out_dir/TX/filtered/${sample_ids[$i]}/
-  mkdir -p $out_dir_i
-  echo "vartrix out dir: $out_dir_i"
+  #for bc_lvl in $(ls $tx_dir/$sample_id/barcodes/) ; do
+  for bc_lvl in cellbender ; do
 
-  # stage barcodes
-  zcat $tx_dir/${tx_dirs[$i]}/filtered_feature_bc_matrix/barcodes.tsv.gz \
-    > $out_dir_i/barcodes.tsv
+    bc_file=$tx_dir/$sample_id/barcodes/$bc_lvl/barcodes.tsv.gz
+    echo "barcodes: $bc_lvl"
+    echo "barcodes file: $bc_file"
 
-  # run vartrix
-  vartrix_linux \
-    --vcf $vcf.1p_nochr.vcf.gz \
-    --bam $tx_dir/${tx_dirs[$i]}/possorted_genome_bam.bam \
-    --fasta $fasta_nochr \
-    --cell-barcodes $out_dir_i/barcodes.tsv \
-    --out-matrix $out_dir_i/alt.mtx \
-    --ref-matrix $out_dir_i/ref.mtx \
-    --out-variants $out_dir_i/variants.txt \
-    --scoring-method coverage \
-    --threads 8 \
-    --umi
+    # create dir
+    out_dir_i=$out_dir/TX/$bc_lvl/$sample_id/
+    mkdir -p $out_dir_i
+    echo "vartrix out dir: $out_dir_i"
+
+    # stage barcodes
+    zcat $bc_file > $out_dir_i/barcodes.tsv
+
+    # run vartrix
+    vartrix_linux \
+      --vcf $vcf.1p_nochr.vcf.gz \
+      --bam $tx_dir/$sample_id/possorted_genome_bam.bam \
+      --fasta $fasta_nochr \
+      --cell-barcodes $out_dir_i/barcodes.tsv \
+      --out-matrix $out_dir_i/alt.mtx \
+      --ref-matrix $out_dir_i/ref.mtx \
+      --out-variants $out_dir_i/variants.txt \
+      --scoring-method coverage \
+      --threads 8 \
+      --umi
+
+  done
   
 done
 
-echo "run vartrix on the PacBio"
+# echo "run vartrix on the PacBio"
 
-# create dir
-out_dir_i=$out_dir/PB/filtered/PD63118b/
-mkdir -p $out_dir_i
+# # create dir
+# out_dir_i=$out_dir/PB/cellranger_filtered/PD63118b/
+# mkdir -p $out_dir_i
 
-# stage barcodes
-cp $pb_dir/genes_seurat/barcodes.tsv $out_dir_i/barcodes.tsv
+# # stage barcodes
+# cp $pb_dir/genes_seurat/barcodes.tsv $out_dir_i/barcodes.tsv
 
-# run vartrix
-vartrix_linux \
-  --vcf $vcf.1p.vcf.gz \
-  --bam $pb_dir/21999.m84093_241025_215302_s4.scisoseq.mapped.bam \
-  --fasta $fasta \
-  --cell-barcodes $out_dir_i/barcodes.tsv \
-  --scoring-method coverage \
-  --out-matrix $out_dir_i/alt.mtx \
-  --ref-matrix $out_dir_i/ref.mtx \
-  --out-variants $out_dir_i/variants.txt \
-  --threads 8 \
-  --umi
+# # run vartrix
+# vartrix_linux \
+#   --vcf $vcf.1p.vcf.gz \
+#   --bam $pb_dir/21999.m84093_241025_215302_s4.scisoseq.mapped.bam \
+#   --fasta $fasta \
+#   --cell-barcodes $out_dir_i/barcodes.tsv \
+#   --scoring-method coverage \
+#   --out-matrix $out_dir_i/alt.mtx \
+#   --ref-matrix $out_dir_i/ref.mtx \
+#   --out-variants $out_dir_i/variants.txt \
+#   --threads 8 \
+#   --umi

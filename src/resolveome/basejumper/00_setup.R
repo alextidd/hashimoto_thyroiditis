@@ -8,6 +8,7 @@ library(dplyr)
 # dirs
 data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/")
 fastq_dir <- file.path(data_dir, "/fastqs/reads")
+dir.create(fastq_dir, recursive = TRUE, showWarnings = FALSE)
 
 # read samplesheet
 ss <- readr::read_csv(file.path(data_dir, "bams/samplesheet_local.csv"))
