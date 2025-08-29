@@ -38,7 +38,6 @@ library(ggplot2)
 theme_set(theme_classic())
 
 # function: plot phased baf
-# function: plot baf
 plot_baf <- function(p_dat, min_depth = 5) {
   # prep data
   p_dat2 <-

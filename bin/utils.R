@@ -107,36 +107,27 @@ plot_vaf_dist <- function(p_dat, p_title = "VAF distribution") {
 }
 
 # function: get the trinucleotide context of the muts
-get_mut_trinucs <- function(dat) {
-
-  # libraries
-  library(BSgenome.Hsapiens.UCSC.hg19)
-  library(GenomicRanges)
-  library(dplyr)
-
-  # get snvs only
-  snvs <-
-    dat %>%
-    dplyr::filter(nchar(ref) == 1, nchar(alt) == 1)
-
-  # get the trinucleotide context
-  gr <- GRanges(
-    seqnames = snvs$chr,
-    ranges = IRanges(start = snvs$pos - 1, end = snvs$pos + 1)
-  )
-
-  # add context, annotate the pyrimidine base
-  snvs <-
-    snvs %>%
-    mutate(trinuc_ref = as.character(getSeq(BSgenome.Hsapiens.UCSC.hg19, gr)),
-           sub = paste(ref, alt, sep = ">"),
-           sub_py = dplyr::case_when(
-             ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", sub),
-             TRUE ~ sub),
-           trinuc_ref_py = dplyr::case_when(
-             ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", trinuc_ref),
-             TRUE ~ trinuc_ref))
-
+get_mut_trinucs <- function(dat, fasta = "data/gatk/grch38/genome.fa") {
+  dat %>%
+    # get snvs only
+    dplyr::filter(nchar(ref) == 1, nchar(alt) == 1) %>%
+    # get the trinucleotide context
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      trinuc_ref = Rsamtools::scanFa(fasta,
+                                     GRanges(chr, IRanges(pos - 1,
+                                                          pos + 1))) %>%
+                    as.vector()) %>%
+    dplyr::ungroup() %>%
+    # annotate the mutation from the pyrimidine base
+    dplyr::mutate(
+      sub = paste(ref, alt, sep = ">"),
+      sub_py = dplyr::case_when(
+        ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", sub),
+        TRUE ~ sub),
+      trinuc_ref_py = dplyr::case_when(
+        ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", trinuc_ref),
+        TRUE ~ trinuc_ref))
 }
 
 # function: get the reverse complement of vector of barcodes

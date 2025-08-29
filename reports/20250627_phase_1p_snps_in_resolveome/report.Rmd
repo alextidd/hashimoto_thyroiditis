@@ -14,6 +14,7 @@ output:
 params:
   title: null
   cache_path: null
+  rerun: false
 ---
 
 ```{r setup, include = FALSE}
@@ -102,7 +103,7 @@ loh_cell_ids <-
 
 First, we get all SNPs on 1p in the LOH cells.
 
-```{r load_plate3_wellA2_snps, eval = F}
+```{r load_snps, eval = F}
 loh_snps <-
   "out/resolveome/nf-resolveome/dna/PD63118/genotyping/snps/PD63118_genotyped_snps.tsv" %>%
   readr::read_tsv() %>%
@@ -114,7 +115,7 @@ loh_snps <-
 saveRDS(loh_snps, "out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
 ```
 
-```{r reload_plate3_wellA2_snps}
+```{r reload_snps, eval = T}
 loh_snps <- readRDS("out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
 ```
 
@@ -130,7 +131,7 @@ plate3_wellA2 <-
          hap_A_vaf = case_when(mut_vaf > 0.9 ~ mut_vaf,
                                mut_vaf < 0.1 ~ 1 - mut_vaf),
          hap_B_type = case_when(mut_vaf > 0.9 ~ "ref",
-                                  mut_vaf < 0.1 ~ "alt"),
+                                mut_vaf < 0.1 ~ "alt"),
          hap_B_vaf = case_when(mut_vaf > 0.9 ~ 1 - mut_vaf,
                                mut_vaf < 0.1 ~ mut_vaf)) %>%
   right_join(loh_snps$plate3_wellA2_dna_run49882 %>% filter(pos < 121500000))
@@ -169,7 +170,7 @@ phased_loh_snps <-
 # save phased snps
 saveRDS(phased_loh_snps, "out/phase_snps/phased_loh_genotyped_chr1_snps.rds")
 
-# save phased baf plots
+# # save phased baf plots
 purrr::walk2(names(phased_loh_snps), phased_loh_snps, function(id_i, i) {
   p <- plot_baf(i) + ggtitle(id_i)
   print(p)
@@ -186,6 +187,7 @@ Next, we attempt to identify the breakpoints in each case.
 # find the first position at which the rolling average delta is > -0.9 or < 0.9
 # take the snp one before that
 # plot a red dotted line and record the position of the breakpoint
+breakpoints_and_haps <- list()
 purrr::walk2(names(phased_loh_snps), phased_loh_snps, function(id_i, i) {
 
   print(id_i)
@@ -276,6 +278,6 @@ breakpoints_and_haps %>%
   guides(x = guide_axis(angle = -90))
 
 # save breakpoints
-breakpoints %>%
-  readr::write_tsv(file.path(cache_path, "breakpoints.tsv"))
+breakpoints_and_haps %>%
+  readr::write_tsv(file.path(params$cache_path, "breakpoints_and_haps.tsv"))
 ```
