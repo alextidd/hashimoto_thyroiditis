@@ -1,5 +1,5 @@
 #!/bin/bash
-# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J nf-resolveome_01_dna_run -o log/%J_nf-resolveome_01_dna_run.out -e log/%J_nf-resolveome_01_dna_run.err 'bash src/nf-resolveome/01_dna_run.sh'
+# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J resolveome_nf-resolveome_01_dna_run -o log/%J_resolveome_nf-resolveome_01_dna_run.out -e log/%J_resolveome_nf-resolveome_01_dna_run.err 'bash src/resolveome/nf-resolveome/01_dna_run.sh'
 
 # dirs
 wd=$(pwd)

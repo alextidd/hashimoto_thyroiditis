@@ -3,39 +3,6 @@
 # libraries
 library(magrittr)
 
-# function: define mutation type based on ref and alt, split up mnvs and dnvs
-type_mutations <- function(df) {
-  typed_df <-
-    df %>%
-    dplyr::mutate(type = dplyr::case_when(
-      nchar(ref) == 1 & nchar(alt) == 1 ~ "snv",
-      nchar(ref) == 1 & nchar(alt) > 1 ~ "ins",
-      nchar(ref) > 1 & nchar(alt) == 1 ~ "del",
-      nchar(ref) == 2 & nchar(alt) == 2 ~ "dnv",
-      nchar(ref) > 2 & nchar(alt) > 2 ~ "mnv"
-    ))
-
-  # expand dnv/mnv mutations to all positions
-  if (any(typed_df$type %in% c("dnv", "mnv"))) {
-    typed_df_dnv_mnv <-
-      typed_df %>%
-      dplyr::filter(type %in% c("dnv", "mnv")) %>%
-      dplyr::mutate(mut_id = paste(chr, pos, ref, alt, type)) %>%
-      dplyr::group_by(dplyr::across(-c(pos, alt, ref))) %>%
-      dplyr::reframe(pos = pos:(pos + nchar(alt) - 1),
-                     ref = strsplit(ref, split = "") %>% unlist(),
-                     alt = strsplit(alt, split = "") %>% unlist()) %>%
-      dplyr::select(-mut_id)
-    typed_df <-
-      typed_df %>%
-      dplyr::filter(!(type %in% c("dnv", "mnv"))) %>%
-      dplyr::bind_rows(typed_df_dnv_mnv)
-  }
-
-  # return
-  typed_df
-}
-
 # dirs
 wd <- getwd()
 data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/bams/")
@@ -74,7 +41,7 @@ caveman_snps <-
       dplyr::inner_join(common_snps) %>%
       dplyr::transmute(chr = `#CHROM`, pos = POS, ref = REF, alt = ALT) %>%
       # type the mutations
-      type_mutations() %>%
+      alexr::type_variants() %>%
       dplyr::distinct()
   })
 
@@ -89,8 +56,17 @@ nanoseq_muts <-
 # write mutations and snps
 purrr::walk2(names(nanoseq_muts), nanoseq_muts, function(donor_id_i, muts_i) {
   dir.create(file.path(out_dir, donor_id_i))
+
+  # save mutations
   muts_i %>%
     readr::write_tsv(file.path(out_dir, donor_id_i, "nanoseq_mutations.tsv"))
+
+  # save complex mutations (will be discarded by nf-resolveome)
+  muts_i %>%
+    alexr::type_mutations() %>%
+    dplyr::filter(type %in% c("dnv", "mnv")) %>%
+    readr::write_tsv(file.path(out_dir, donor_id_i,
+                               "nanoseq_mutations_complex.tsv"))
 })
 purrr::walk2(names(caveman_snps), caveman_snps, function(donor_id_i, snps_i) {
   snps_i %>%
@@ -112,7 +88,8 @@ ss <-
     snps = ifelse(file.exists(snps), snps, NA)) %>%
   {split(., .$seq_type)}
 purrr::walk2(names(ss), ss, function(seq_type_i, ss_i) {
-  dir.create(file.path("out/resolveome/nf-resolveome", seq_type_i))
+  dir.create(file.path("out/resolveome/nf-resolveome", seq_type_i),
+             showWarnings = FALSE)
   ss_i %>%
     readr::write_csv(file.path("out/resolveome/nf-resolveome", seq_type_i,
                                "samplesheet.csv"))

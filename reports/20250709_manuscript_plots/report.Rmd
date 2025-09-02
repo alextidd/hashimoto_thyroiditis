@@ -14,6 +14,7 @@ output:
 params:
   title: null
   cache_path: null
+  rerun: false
 ---
 
 ```{r setup, include = FALSE}
@@ -1076,7 +1077,7 @@ bj_muts_per_seq_type_filter %>%
 ```
 
 ```{r get_bj_muts}
-  # pileup across dna and dnahyb
+# pileup across dna and dnahyb
 bj_muts <- xfun::cache_rds({
   bj_muts_per_seq_type_filter %>%
     group_by(cell_id) %>%
@@ -1099,7 +1100,7 @@ bj_muts_filter <-
       filter(mut_vaf > 0.3, mut_depth > 5) %>%
       group_by(chr, pos, ref, alt) %>%
       mutate(n_cells_w_mut = n_distinct(cell_id),
-            n_cells = n_distinct(bj_muts$cell_id)) %>%
+             n_cells = n_distinct(bj_muts$cell_id)) %>%
       filter(n_cells_w_mut / n_cells < 0.5) %>%
       ungroup()
   }, file = "bj_muts_filter.rds", rerun = params$rerun)

@@ -8,6 +8,7 @@ library(dplyr)
 # dirs
 data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/")
 fastq_dir <- file.path(data_dir, "/fastqs/reads")
+out_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/out/resolveome/basejumper")
 dir.create(fastq_dir, recursive = TRUE, showWarnings = FALSE)
 
 # read samplesheet
@@ -40,19 +41,17 @@ bj_runs <-
   list(list(pipeline = "bj-dna-qc", seq_type = "dna"),
        list(pipeline = "bj-expression", seq_type = "rna"),
        list(pipeline = "bj-somatic-variantcalling", seq_type = "dna"),
-       list(pipeline = "bj-somatic-variantcalling", seq_type = "dnahyb"),
-       list(pipeline = "bj-somatic-variantcalling-develop", seq_type = "dna"),
-       list(pipeline = "bj-somatic-variantcalling-develop", seq_type = "dnahyb"))
+       list(pipeline = "bj-somatic-variantcalling", seq_type = "dnahyb"))
 
 # save samplesheets
 bj_runs %>%
   walk(function(run) {
     lis <- ss_fastq[[run$seq_type]]
     walk2(names(lis), lis, function(i, df) {
-      out_dir <- file.path("out/resolveome/basejumper", run$pipeline, run$seq_type, i)
-      dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+      out_dir_i <- file.path(out_dir, run$pipeline, run$seq_type, i)
+      dir.create(out_dir_i, recursive = TRUE, showWarnings = FALSE)
       df %>%
         select(biosampleName, read1, read2) %>%
-        readr::write_csv(file.path(out_dir, "samplesheet.csv"))
+        readr::write_csv(file.path(out_dir_i, "samplesheet.csv"))
     })
   })

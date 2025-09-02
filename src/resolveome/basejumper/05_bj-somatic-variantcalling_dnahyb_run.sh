@@ -1,13 +1,14 @@
 #!/bin/bash
 # donor_id=PD63118
 # donor_id=PD66718
-# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q week -M20000 -R 'span[hosts=1] select[mem>20000] rusage[mem=20000]' -J 05_bj-somatic-variantcalling_dnahyb_${donor_id}_run -o log/%J_05_bj-somatic-variantcalling_dnahyb_${donor_id}_run.out -e log/%J_05_bj-somatic-variantcalling_dnahyb_${donor_id}_run.err "bash src/basejumper/05_bj-somatic-variantcalling_dnahyb_run.sh ${donor_id}"
+# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q week -M20000 -R 'span[hosts=1] select[mem>20000] rusage[mem=20000]' -J 05_bj-somatic-variantcalling_dnahyb_${donor_id}_run -o log/%J_05_bj-somatic-variantcalling_dnahyb_${donor_id}_run.out -e log/%J_05_bj-somatic-variantcalling_dnahyb_${donor_id}_run.err "bash src/resolveome/basejumper/05_bj-somatic-variantcalling_dnahyb_run.sh ${donor_id}"
 
 # parameters
 donor_id=$1
 
 # dirs
 wd=$(pwd)
+lustre_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/
 
 # modules
 module load singularityce-4.1.0/python-3.11.6
@@ -18,7 +19,7 @@ export LSB_EXCLUSIVE=Y
 
 # run
 (
-  cd out/resolveome/basejumper/bj-somatic-variantcalling/dnahyb/$donor_id/
+  cd $lustre_dir/out/resolveome/basejumper/bj-somatic-variantcalling/dnahyb/$donor_id/
   nextflow run $NFS_TEAM/nextflow/external/basejumper/bj-somatic-variantcalling \
     --input_csv samplesheet.csv \
     --publish_dir $donor_id \
@@ -30,7 +31,7 @@ export LSB_EXCLUSIVE=Y
     -c $wd/config/bj-somatic-variantcalling_dnahyb.config \
     -c $wd/config/bj-somatic-variantcalling.config \
     -c $wd/config/basejumper.config \
-    -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/basejumper/bj-somatic-variantcalling/dnahyb/$donor_id/ \
+    -w $lustre_dir/work/basejumper/bj-somatic-variantcalling/dnahyb/$donor_id/ \
     -profile singularity \
     --architecture "x86_64" \
     -resume \
@@ -38,4 +39,4 @@ export LSB_EXCLUSIVE=Y
     -N at31@sanger.ac.uk
 )
 
-# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03e_basejumper_somatic-variantcalling_dnahyb_symlink -o "log/%J_03e_basejumper_somatic-variantcalling_dnahyb_symlink.out" "replace_symlinks out/resolveome/basejumper/bj-somatic-variantcalling/dnahyb/"
+# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 05_bj-somatic-variantcalling_dnahyb_symlink -o "log/%J_05_bj-somatic-variantcalling_dnahyb_symlink.out" -e "log/%J_05_bj-somatic-variantcalling_dnahyb_symlink.err" "source ~/.bashrc && replace_symlinks cd $LUSTRE_125/projects/hashimoto_thyroiditis/out/basejumper/bj-somatic-variantcalling/dnahyb/"

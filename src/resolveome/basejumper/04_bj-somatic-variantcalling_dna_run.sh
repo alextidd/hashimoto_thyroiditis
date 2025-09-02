@@ -6,6 +6,7 @@ donor_id=$1
 
 # dirs
 wd=$(pwd)
+lustre_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/
 
 # modules
 module load singularityce-4.1.0/python-3.11.6
@@ -16,7 +17,7 @@ export LSB_EXCLUSIVE=Y
 
 # run
 (
-  cd out/resolveome/basejumper/bj-somatic-variantcalling/dna/$donor_id/
+  cd $lustre_dir/out/resolveome/basejumper/bj-somatic-variantcalling/dna/$donor_id/
   nextflow run $NFS_TEAM/nextflow/external/basejumper/bj-somatic-variantcalling \
     --input_csv samplesheet.csv \
     --publish_dir $donor_id \
@@ -27,11 +28,11 @@ export LSB_EXCLUSIVE=Y
     --skip_sigprofile false \
     -c $wd/config/bj-somatic-variantcalling.config \
     -c $wd/config/basejumper.config \
-    -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/basejumper/bj-somatic-variantcalling/dna/$donor_id/ \
+    -w $lustre_dir/work/basejumper/bj-somatic-variantcalling/dna/$donor_id/ \
     -profile singularity \
     --architecture "x86_64" \
     -N at31@sanger.ac.uk \
     -resume
 )
 
-# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03d_basejumper_somatic-variantcalling_dna_symlink -o "log/%J_03d_basejumper_somatic-variantcalling_dna_symlink.out" "source ~/.bashrc && replace_symlinks out/resolveome/basejumper/bj-somatic-variantcalling/dna/"
+# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 04_bj-somatic-variantcalling_dna_symlink -o "log/%J_04_bj-somatic-variantcalling_dna_symlink.out" -e "log/%J_04_bj-somatic-variantcalling_dna_symlink.err" "source ~/.bashrc && replace_symlinks $LUSTRE_125/projects/hashimoto_thyroiditis/out/basejumper/bj-somatic-variantcalling/dna/"

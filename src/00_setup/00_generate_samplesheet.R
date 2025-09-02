@@ -15,7 +15,8 @@ dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 
 # read in manifests
 manifests <-
-  list.files("data/resolveome/manifest/", pattern = ".xlsx$", full.names = TRUE) %>%
+  "data/resolveome/manifest/" %>%
+  list.files(pattern = ".xlsx$", full.names = TRUE) %>%
   {setNames(., basename(.) %>% tools::file_path_sans_ext())} %>%
   purrr::map(function(file) {
     file %>%
@@ -105,7 +106,7 @@ clean_cell_ids <-
   system("ls data/resolveome/manual_inspection/PD*.tsv", intern = TRUE) %>%
   purrr::map(readr::read_tsv) %>%
   dplyr::bind_rows() %>%
-  dplyr::filter(!suspected_doublet | is.na(suspected_doublet) | plate == 10,
+  dplyr::filter(!suspected_doublet | is.na(suspected_doublet),
                 !chr_dropout | is.na(chr_dropout)) %>%
   dplyr::pull(cell_id)
 

@@ -12,7 +12,7 @@ module load singularity
 
 # run
 (
-  cd out/resolveome/basejumper/bj-somatic-variantcalling-develop/dna/$donor_id/
+  cd $LUSTRE_125/projects/hashimoto_thyroiditis/out/basejumper/bj-somatic-variantcalling/dna/$donor_id/
   nextflow run $wd/../nextflow/external/basejumper/bj-somatic-variantcalling-parabricks-develop \
     --input_csv samplesheet.csv \
     --publish_dir $donor_id \
@@ -26,4 +26,4 @@ module load singularity
     -N at31@sanger.ac.uk
 )
 
-# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03d_basejumper_somatic-variantcalling_dna_symlink -o "log/%J_03d_basejumper_somatic-variantcalling_dna_symlink.out" "source ~/.bashrc && replace_symlinks out/resolveome/basejumper/bj-somatic-variantcalling/dna/"
+# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 03d_basejumper_somatic-variantcalling_dna_symlink -o "log/%J_03d_basejumper_somatic-variantcalling_dna_symlink.out" "source ~/.bashrc && replace_symlinks $LUSTRE_125/projects/hashimoto_thyroiditis/out/basejumper/bj-somatic-variantcalling/dna/PD63118/"
