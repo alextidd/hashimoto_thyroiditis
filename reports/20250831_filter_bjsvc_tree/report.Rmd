@@ -204,3 +204,85 @@ We save the filtered calls.
 write_tsv(bj_muts_per_seq_type_filter,
           file.path(params$cache_path, "filtered_mutations.tsv"))
 ```
+
+We plot the tree.
+
+```{r tree}
+library(ape)
+tree_file <- "/lustre/scratch125/casm/teams/team268/at31//projects/hashimoto_thyroiditis/out/resolveome/basejumper/bj-somatic-variantcalling/dna/PD63118/PD63118_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA/Sequoia_group_null_bino-10_rhosnp0.4_rhoindel0.4_mincov10_maxcov500_both_tree_with_branch_length.tree"
+tree <-
+  tree_file %>%
+  ape::read.tree()
+
+# load cell id to new cell id
+cell_annots <-
+  tibble::tibble(id = tree$tip.label) %>%
+  dplyr::left_join(
+    "/lustre/scratch125/casm/teams/team268/at31//projects/hashimoto_thyroiditis/out/resolveome/basejumper/bj-somatic-variantcalling/dna/PD63118/samplesheet.csv" %>%
+      readr::read_csv() %>%
+      dplyr::transmute(id = biosampleName, cell_id = gsub("_dna.*", "", id)) %>%
+      # add new cells ids + additional annotations
+      dplyr::left_join(
+        readr::read_tsv("data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv") %>%
+          dplyr::mutate(cell_id_new = cell_ID, cell_id = well_ID)
+      )
+  )
+
+# prune tips not in the new cell ids
+to_prune <- cell_annots %>% dplyr::filter(is.na(cell_id_new)) %>% dplyr::pull(id)
+pruned_tree <- drop.tip(tree, to_prune)
+cell_annots_pruned <-
+  cell_annots %>%
+  dplyr::filter(!is.na(cell_id_new))
+
+# rename tips
+pruned_tree$tip.label <- cell_annots_pruned$cell_id_new
+
+# plot tree
+pdf(paste0("out/resolveome/sequoia/tree_with_branch_length.pdf"), width = 10)
+
+# plain tree
+plot(pruned_tree, cex = 0.7)
+axisPhylo(side = 1, backward = FALSE)
+
+# tree coloured by celltype
+tip_cols <- ifelse(cell_annots_pruned$celltype_VDJ_recomb == "B cell", "blue",
+            ifelse(cell_annots_pruned$celltype_VDJ_recomb == "alpha-beta T cell", "red", "grey"))
+plot(pruned_tree, tip.color = tip_cols, cex = 0.7)
+axisPhylo(side = 1, backward = FALSE)
+legend("topright",
+       legend = c("B cell", "alpha-beta T cell", "not lymphocyte"),
+       col    = c("blue", "red", "grey"),
+       pch    = 19,
+       pt.cex = 1,
+       bty    = "n") 
+
+# tree coloured by biallelic_CD274
+tip_cols <- ifelse(cell_annots_pruned$biallelic_CD274 == "TRUE_Compound", "blue",
+            ifelse(cell_annots_pruned$biallelic_CD274 == "TRUE_LOH", "#3ec83e",
+            ifelse(cell_annots_pruned$biallelic_CD274 == "FALSE_Het", "red",
+            ifelse(cell_annots_pruned$biallelic_CD274 == "Unclear - 9p del + intronic", "purple",
+                   "grey"))))
+plot(pruned_tree, tip.color = tip_cols, cex = 0.7)
+axisPhylo(side = 1, backward = FALSE)
+legend("topright",
+       legend = c("TRUE_Compound", "TRUE_LOH", "FALSE_Het", "Unclear - 9p del + intronic", "WT/-"),
+       col    = c("blue", "#3ec83e", "red", "purple", "grey"),
+       pch    = 19,
+       pt.cex = 1,
+       bty    = "n")
+
+# tree coloured by SHM
+tip_cols <- ifelse(cell_annots_pruned$celltype_SHM == "Mature B cell", "blue",
+                   "red")
+plot(pruned_tree, tip.color = tip_cols, cex = 0.7)
+axisPhylo(side = 1, backward = FALSE)
+legend("topright",
+       legend = c("Mature B cell", "Not mature B cell"),
+       col    = c("blue", "red"),
+       pch    = 19,
+       pt.cex = 1,
+       bty    = "n")
+
+dev.off()
+```

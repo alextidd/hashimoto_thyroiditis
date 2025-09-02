@@ -46,44 +46,12 @@ option_list = list(
 )
 opt = parse_args(OptionParser(option_list=option_list, add_help_option=T))
 
-# defaults
-# opt <- list(
-#   donor_id = 'Patient',
-#   input_nv = NULL,
-#   input_nr = NULL,
-#   cgpvaf_output = NULL,
-#   output_dir = "",
-#   beta_binom_shared = TRUE,
-#   ncores = 1,
-#   normal_flt = 'PDv37is',
-#   snv_rho = 0.1,
-#   indel_rho = 0.15,
-#   min_cov = 10,
-#   max_cov = 500,
-#   only_snvs = TRUE,
-#   split_trees = TRUE,
-#   keep_ancestral = FALSE,
-#   exclude_samples = NULL,
-#   cnv_samples = NULL,
-#   vaf_absent = 0.1,
-#   vaf_present = 0.3,
-#   mixmodel = FALSE,
-#   min_clonal_mut = 35,
-#   tree_mut_pval = 0.01,
-#   genotype_conv_prob = FALSE,
-#   min_pval_for_true_somatic = 0.05,
-#   min_variant_reads_shared = 2,
-#   min_vaf_shared = 2,
-#   create_multi_tree = TRUE,
-#   mpboot_path = "",
-#   germline_cutoff = -5,
-#   genomeFile = "/nfs/cancer_ref01/Homo_sapiens/37/genome.fa",
-#   plot_spectra = FALSE,
-#   max_muts_plot = 5000,
-#   lowVAF_filter = 0,
-#   lowVAF_filter_positive_samples = 0,
-#   VAF_treshold_mixmodel = 0.3
-# )
+# defaults: # opt <- list(donor_id = 'Patient', input_nv = NULL, input_nr = NULL, cgpvaf_output = NULL, output_dir = "", beta_binom_shared = TRUE, ncores = 1, normal_flt = 'PDv37is', snv_rho = 0.1, indel_rho = 0.15, min_cov = 10, max_cov = 500, only_snvs = TRUE, split_trees = TRUE, keep_ancestral = FALSE, exclude_samples = NULL, cnv_samples = NULL, vaf_absent = 0.1, vaf_present = 0.3, mixmodel = FALSE, min_clonal_mut = 35, tree_mut_pval = 0.01, genotype_conv_prob = FALSE, min_pval_for_true_somatic = 0.05, min_variant_reads_shared = 2, min_vaf_shared = 2, create_multi_tree = TRUE, mpboot_path = "", germline_cutoff = -5, genomeFile = "/nfs/cancer_ref01/Homo_sapiens/37/genome.fa", plot_spectra = FALSE, max_muts_plot = 5000, lowVAF_filter = 0, lowVAF_filter_positive_samples = 0, VAF_treshold_mixmodel = 0.3)
+# test:     #
+# opt$output_dir <- "out/resolveome/sequoia/"
+# opt$input_nv <- "out/resolveome/sequoia/NV_filtered.tsv"
+# opt$input_nr <- "out/resolveome/sequoia/NR_filtered.tsv"
+# opt$cnv_samples <- "plate10_wellA10_dna_run50382,plate10_wellA5_dna_run50382,plate10_wellA8_dna_run50382,plate10_wellA9_dna_run50382,plate10_wellB6_dna_run50382,plate10_wellC3_dna_run50382,plate10_wellC7_dna_run50382,plate10_wellD2_dna_run50382,plate10_wellD3_dna_run50382,plate10_wellD6_dna_run50382,plate10_wellD7_dna_run50382,plate10_wellE10_dna_run50382,plate10_wellF12_dna_run50382,plate10_wellF3_dna_run50382,plate10_wellF5_dna_run50382,plate10_wellF6_dna_run50382,plate10_wellF7_dna_run50382,plate10_wellG10_dna_run50382,plate10_wellG2_dna_run50382,plate10_wellG3_dna_run50382,plate10_wellG4_dna_run50382,plate10_wellG9_dna_run50382,plate10_wellH4_dna_run50382,plate10_wellH5_dna_run50382,plate3_wellA2_dna_run49882,plate3_wellB3_dna_run49882,plate3_wellC8_dna_run49882,plate3_wellD4_dna_run49882,plate3_wellD7_dna_run49882,plate3_wellE10_dna_run49882,plate3_wellE11_dna_run49882,plate3_wellF6_dna_run49882,plate3_wellF7_dna_run49882,plate3_wellH5_dna_run49882,plate3_wellH6_dna_run49882"
 
 print(opt)
 
