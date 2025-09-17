@@ -36,17 +36,20 @@ library(ggplot2)
 library(readr)
 library(tidyr)
 library(liftOver)
+library(ape)
+library(patchwork)
 
 # set ggplot presets
 theme_set(theme_classic())
+
+# dirs
+seq_dir <- "out/resolveome/sequoia/20250917/"
 ```
 
 # Parameters
 
 ```{r params, echo = FALSE}
-params %>%
-  tibble::enframe() %>%
-  knitr::kable()
+params
 ```
 
 # Samplesheet
@@ -100,146 +103,39 @@ ss_annot <-
   inner_join(cts)
 ```
 
-# Somatic mutation calling
-
-We load mutation calls from `bj-somatic-variantcalling` and we combine the calls
-per cell.
-
-```{r load_bjsvc}
-# get NR and NV
-bj_muts_per_seq_type_38 <-
-  c("dna") %>% # "dnahyb"
-  purrr::set_names() %>%
-  purrr::map(function(seq_type) {
-    # get nr and nv
-    c("mut_depth" = "NV", "total_depth" = "NR") %>%
-      purrr::map(function(i) {
-        file.path("out/resolveome/basejumper/bj-somatic-variantcalling",
-                  seq_type, "PD63118/PD63118_run",
-                  "SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA",
-                  paste0("Sequoia_group_null_bino-10_rhosnp0.4_rhoindel0.4_mincov10_maxcov500_both_",
-                         i, "_filtered_all.txt")) %>%
-          read.table() %>%
-          tibble::rownames_to_column(var = "mut_id")
-      }) %>%
-      bind_rows(.id = "name") %>%
-      pivot_longer(cols = -c("name", "mut_id"), names_to = "id") %>%
-      pivot_wider() %>%
-      separate_wider_delim(cols = "mut_id", delim = "_", cols_remove = FALSE,
-                           names = c("chr", "pos", "ref", "alt")) %>%
-      mutate(pos = as.numeric(pos)) %>%
-      # calculate global VAFs
-      group_by(mut_id) %>%
-      mutate(mut_vaf = mut_depth / total_depth,
-             global_mut_depth = sum(mut_depth),
-             global_total_depth = sum(total_depth),
-             global_mut_vaf = global_mut_depth / global_total_depth) %>%
-      ungroup() %>%
-      # get muts only
-      filter(mut_depth > 0)
-  }) %>%
-  bind_rows(.id = "seq_type") %>%
-  # filter to only annotated, qc'ed cells
-  inner_join(ss_annot %>% distinct(id, cell_id, celltype_VDJ_SHM_CSR, loh_1p))
-
-# lift over to grch37
-bj_muts_per_seq_type <-
-  bj_muts_per_seq_type_38 %>%
-  dplyr::mutate(pos_38 = pos) %>%
-  alexr::lift_over("../../reference/liftover/hg38ToHg19.over.chain")
-
-# view
-bj_muts_per_seq_type
-```
-
-We visualise the global VAF distribution.
-
-```{r plot_global_vaf}
-bj_muts_per_seq_type %>%
-  distinct(chr, mut_id, seq_type, global_mut_vaf) %>%
-  ggplot(aes(x = global_mut_vaf)) +
-  geom_histogram(bins = 100) +
-  lims(x = c(NA, 1)) +
-  ggh4x::facet_nested(seq_type ~ ., scales = "free_y") +
-  scale_y_continuous(trans = scales::pseudo_log_trans()) +
-  theme_bw() +
-  geom_vline(xintercept = 0.25, linetype = "dashed", color = "red")+
-  geom_vline(xintercept = median(bj_muts_per_seq_type$global_mut_vaf))
-```
-
-We filter out mutations with...
-- global mutant VAF > 0.25
-- mutant VAF < 0.3
-- mutant depth <= 5
-
-```{r global_vaf_filter}
-bj_muts_per_seq_type_filter <-
-  bj_muts_per_seq_type %>%
-  filter(global_mut_vaf < 0.25,
-         mut_vaf > 0.3, mut_depth > 5) %>%
-  group_by(chr, pos, ref, alt) %>%
-  mutate(n_cells_w_mut = n_distinct(cell_id),
-         n_cells = n_distinct(bj_muts_per_seq_type$cell_id)) %>%
-  filter(n_cells_w_mut / n_cells < 0.5) %>%
-  ungroup()
-```
-
-We visualise the global VAF distribution after filtering.
-
-```{r plot_global_vaf_filter}
-bj_muts_per_seq_type_filter %>%
-  distinct(chr, mut_id, seq_type, global_mut_vaf) %>%
-  ggplot(aes(x = global_mut_vaf)) +
-  geom_histogram(bins = 100) +
-  lims(x = c(NA, 1)) +
-  ggh4x::facet_nested(seq_type ~ ., scales = "free_y") +
-  scale_y_continuous(trans = scales::pseudo_log_trans()) +
-  theme_bw() +
-  geom_vline(xintercept = median(bj_muts_per_seq_type_filter$global_mut_vaf))
-```
-
-We save the filtered calls.
-
-```{r save_filtered_calls}
-write_tsv(bj_muts_per_seq_type_filter,
-          file.path(params$cache_path, "filtered_mutations.tsv"))
-```
-
 We plot the tree.
 
-```{r tree}
-library(ape)
-tree_file <- "/lustre/scratch125/casm/teams/team268/at31//projects/hashimoto_thyroiditis/out/resolveome/basejumper/bj-somatic-variantcalling/dna/PD63118/PD63118_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA/Sequoia_group_null_bino-10_rhosnp0.4_rhoindel0.4_mincov10_maxcov500_both_tree_with_branch_length.tree"
+```{r tree, fig.width = 10, fig.height = 10}
+# load tree
 tree <-
-  tree_file %>%
+  file.path(seq_dir, "Patient_both_tree_with_branch_length.tree") %>%
   ape::read.tree()
 
 # load cell id to new cell id
 cell_annots <-
   tibble::tibble(id = tree$tip.label) %>%
-  dplyr::left_join(
-    "/lustre/scratch125/casm/teams/team268/at31//projects/hashimoto_thyroiditis/out/resolveome/basejumper/bj-somatic-variantcalling/dna/PD63118/samplesheet.csv" %>%
+  left_join(
+    file.path(Sys.getenv("LUSTRE_125"),
+              "projects/hashimoto_thyroiditis/out/resolveome/basejumper",
+              "bj-somatic-variantcalling/dna/PD63118/samplesheet.csv") %>%
       readr::read_csv() %>%
-      dplyr::transmute(id = biosampleName, cell_id = gsub("_dna.*", "", id)) %>%
+      transmute(id = biosampleName, cell_id = gsub("_dna.*", "", id)) %>%
       # add new cells ids + additional annotations
-      dplyr::left_join(
+      left_join(
         readr::read_tsv("data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv") %>%
-          dplyr::mutate(cell_id_new = cell_ID, cell_id = well_ID)
+          mutate(cell_id_new = cell_ID, cell_id = well_ID)
       )
   )
 
 # prune tips not in the new cell ids
-to_prune <- cell_annots %>% dplyr::filter(is.na(cell_id_new)) %>% dplyr::pull(id)
+to_prune <- cell_annots %>% filter(is.na(cell_id_new)) %>% pull(id)
 pruned_tree <- drop.tip(tree, to_prune)
 cell_annots_pruned <-
   cell_annots %>%
-  dplyr::filter(!is.na(cell_id_new))
+  filter(!is.na(cell_id_new))
 
 # rename tips
 pruned_tree$tip.label <- cell_annots_pruned$cell_id_new
-
-# plot tree
-pdf(paste0("out/resolveome/sequoia/tree_with_branch_length.pdf"), width = 10)
 
 # plain tree
 plot(pruned_tree, cex = 0.7)
@@ -255,7 +151,7 @@ legend("topright",
        col    = c("blue", "red", "grey"),
        pch    = 19,
        pt.cex = 1,
-       bty    = "n") 
+       bty    = "n")
 
 # tree coloured by biallelic_CD274
 tip_cols <- ifelse(cell_annots_pruned$biallelic_CD274 == "TRUE_Compound", "blue",
@@ -283,6 +179,4 @@ legend("topright",
        pch    = 19,
        pt.cex = 1,
        bty    = "n")
-
-dev.off()
 ```

@@ -11,12 +11,6 @@ dir.create("out/twist")
 intervals <-
   readr::read_csv("data/twist/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg19_gene_info.csv")
 
-# save as a bed
-intervals %>%
-  dplyr::transmute(chr, start = bed_start, end = bed_end) %>%
-  readr::write_tsv("out/twist/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg19.bed", 
-                   col_names = FALSE)
-
 # get gene strandedness
 mart <- useEnsembl("ensembl", dataset = "hsapiens_gene_ensembl")
 strandedness <-
