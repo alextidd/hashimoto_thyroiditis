@@ -1216,7 +1216,7 @@ bj_muts_trinuc <-
   xfun::cache_rds({
     bj_muts_trinuc <-
       bj_muts_filter %>%
-      get_mut_trinucs()
+      alexr::get_trinucs()
     bj_muts_trinuc
   }, file = "bj_muts_trinuc.rds", rerun = params$rerun)
 ```
@@ -1225,16 +1225,16 @@ Plot trinucleotide spectrum.
 
 ```{r plot_spectra_good, fig.height = 5, fig.width = 11}
 bj_muts %>%
-  get_mut_trinucs() %>%
+  alexr::get_trinucs() %>%
   plot_mut_trinucs("all bj-somatic-variantcalling calls")
 bj_muts_filter %>%
-  get_mut_trinucs() %>%
+  alexr::get_trinucs() %>%
   plot_mut_trinucs("filtered bj-somatic-variantcalling calls")
 bj_muts %>%
   group_by(mut_id) %>%
   filter(n_distinct(cell_id) > 1) %>%
   ungroup() %>%
-  get_mut_trinucs() %>%
+  alexr::get_trinucs() %>%
   plot_mut_trinucs("shared bj-somatic-variantcalling calls")
 ```
 

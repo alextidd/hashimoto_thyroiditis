@@ -41,7 +41,5 @@ theme_set(theme_classic())
 # Parameters
 
 ```{r params, echo = FALSE}
-params %>%
-  tibble::enframe() %>%
-  knitr::kable()
+params
 ```

@@ -1,19 +1,3 @@
-# function: render report
-render_report <- function(report, rerun = FALSE) {
-  subdir <- strsplit(report, "/")[[1]][2]
-  name <- sub("^[^_]+_", "", subdir)
-  date <- format(Sys.Date(), "%Y%m%d")
-  outdir <- file.path("reports", subdir, date)
-  basename <- paste0(date, "_", name)
-  rmarkdown::render(
-    report,
-    output_file = paste0(basename, ".html"),
-    output_dir = outdir,
-    params = list(title = name,
-                  cache_path = file.path(outdir, paste0(basename, "_cache/")),
-                  rerun = rerun))
-}
-
 # function: plot VAF heatmap
 plot_vaf_heatmap <- function(p_dat, p_title = "", annotations = c(), show_rownames = TRUE) {
   library(magrittr)
@@ -104,30 +88,6 @@ plot_vaf_dist <- function(p_dat, p_title = "VAF distribution") {
     ggplot2::lims(x = c(0, 1)) +
     ggplot2::scale_y_continuous(expand = c(0, 0))
   print(p)
-}
-
-# function: get the trinucleotide context of the muts
-get_mut_trinucs <- function(dat, fasta = "data/gatk/grch38/genome.fa") {
-  dat %>%
-    # get snvs only
-    dplyr::filter(nchar(ref) == 1, nchar(alt) == 1) %>%
-    # get the trinucleotide context
-    dplyr::rowwise() %>%
-    dplyr::mutate(
-      trinuc_ref = Rsamtools::scanFa(fasta,
-                                     GRanges(chr, IRanges(pos - 1,
-                                                          pos + 1))) %>%
-                    as.vector()) %>%
-    dplyr::ungroup() %>%
-    # annotate the mutation from the pyrimidine base
-    dplyr::mutate(
-      sub = paste(ref, alt, sep = ">"),
-      sub_py = dplyr::case_when(
-        ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", sub),
-        TRUE ~ sub),
-      trinuc_ref_py = dplyr::case_when(
-        ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", trinuc_ref),
-        TRUE ~ trinuc_ref))
 }
 
 # function: get the reverse complement of vector of barcodes

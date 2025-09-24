@@ -1,10 +1,7 @@
 # cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M50000 -R 'span[hosts=1] select[mem>50000] rusage[mem=50000]' -J resolveome_basejumper_08_bj-somatic-variantcalling_rerun_sequoia -o log/%J_resolveome_basejumper_08_bj-somatic-variantcalling_rerun_sequoia.out -e log/%J_resolveome_basejumper_08_bj-somatic-variantcalling_rerun_sequoia.err 'Rscript src/resolveome/basejumper/08_bj-somatic-variantcalling_rerun_sequoia.R'
-# TODO: remove germline SNPs (from caveman output)
 # TODO: remove variants in >50% of cells
-# TODO: remove RNA editing sites
 # TODO: remove variants with global VAF > 0.25
 # TODO: remove variants with cell VAF < 0.25 or mutant reads < 5
-# TODO: rerun Sequoia filters - exclude cells with copy number changes from contributing to the germline filter
 # TODO: generate a heterozygous SNP histogram per cell to look for outliers
 
 # libraries
@@ -71,7 +68,7 @@ common_snps <-
     lift_over_chain = "../../reference/liftover/hg19ToHg38.over.chain") %>%
   dplyr::mutate(mut_id = paste(chr, pos, sep = "_"))
 
-# mask caveman snps
+# mask sites
 c("NV", "NR") %>%
   purrr::set_names() %>%
   purrr::walk(function(i) {
@@ -91,7 +88,7 @@ c("NV", "NR") %>%
     filt_mat <- filt_mat[!(mut_ids %in% common_snps$mut_id), ]
 
     # save
-    filt_mat%>%
+    filt_mat %>%
       write.table(file = paste0(seq_dir, "/Mat_", i, "_snpmasked.tsv"),
                   sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
   })

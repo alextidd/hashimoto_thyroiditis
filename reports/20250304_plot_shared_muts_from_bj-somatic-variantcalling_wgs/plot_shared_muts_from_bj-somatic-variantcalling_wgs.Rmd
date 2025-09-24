@@ -44,30 +44,6 @@ impact_colours <- c("Essential_Splice" = "#8e55a3",
                     "Synonymous" = "#b3b4b4",
                     "Non-coding" = "#606060")
 
-# function: get the trinucleotide context of the muts
-get_mut_trinucs <- function(dat) {
-  dat %>%
-    # get snps only
-    dplyr::filter(nchar(ref) == 1, nchar(alt) == 1) %>%
-    # get the trinucleotide context
-    dplyr::rowwise() %>%
-    dplyr::mutate(
-      trinuc_ref = Rsamtools::scanFa("data/gatk/grch38/genome.fa",
-                                     GRanges(chr, IRanges(pos - 1,
-                                                          pos + 1))) %>%
-                    as.vector()) %>%
-    dplyr::ungroup() %>%
-    # annotate the mutation from the pyrimidine base
-    dplyr::mutate(
-      sub = paste(ref, alt, sep = ">"),
-      sub_py = dplyr::case_when(
-        ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", sub),
-        TRUE ~ sub),
-      trinuc_ref_py = dplyr::case_when(
-        ref %in% c("A", "G") ~ chartr("TCGA", "AGCT", trinuc_ref),
-        TRUE ~ trinuc_ref))
-}
-
 # function: plot the trinucleotide context of the muts
 plot_mut_trinucs <- function(p_dat, p_title = "") {
   sub_colours <-
@@ -350,7 +326,7 @@ vafs_trinuc <-
   xfun::cache_rds({
     vafs %>%
       dplyr::filter(qual == "good") %>%
-      get_mut_trinucs()
+      alexr::get_trinucs()
   }, file = "vafs_trinuc.rds", rerun = params$rerun)
 ```
 
@@ -465,7 +441,7 @@ excl_vafs_trinuc <-
   vafs %>%
   dplyr::group_by(chr, pos, ref, alt) %>%
   dplyr::filter(paste(sort(unique(id)), collapse = ",") == "plate3_wellD4_dna_run49882,plate3_wellE11_dna_run49882") %>%
-  get_mut_trinucs()
+  alexr::get_trinucs()
 plot_mut_trinucs(excl_vafs_trinuc,
                  "plate3_wellD4, plate3_wellE11 exclusive shared muts")
 ```

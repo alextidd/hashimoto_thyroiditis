@@ -819,6 +819,10 @@ if(!keep_ancestral){
                      error_rate = p.error)
 }
 
+# save tree mut matrices
+write.table(NR_tree, paste0(output_dir,patient_ID,"_",mut_id,"_NR_tree_all.txt"))
+write.table(NV_tree, paste0(output_dir,patient_ID,"_",mut_id,"_NV_tree_all.txt"))
+
 edge_length_nonzero = table(res$summary$edge_ml[res$summary$p_else_where<tree_mut_pval])
 edge_length = rep(0,nrow(tree$edge))
 names(edge_length)=1:nrow(tree$edge)
