@@ -39,6 +39,9 @@ library(GenomicRanges)
 library(slider)
 library(patchwork)
 
+# dirs
+out_dir <- "out/phase_snps/phase_snps_cache"
+
 # function: plot baf
 plot_baf <- function(p_dat) {
   # prep data
@@ -112,11 +115,11 @@ loh_snps <-
   split(.$id)
 
 # save
-saveRDS(loh_snps, "out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
+saveRDS(loh_snps, file.path(out_dir, "loh_genotyped_chr1_snps.rds"))
 ```
 
 ```{r reload_snps, eval = T}
-loh_snps <- readRDS("out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
+loh_snps <- readRDS(file.path(out_dir, "loh_genotyped_chr1_snps.rds"))
 ```
 
 Next, we phase the SNPs on 1p in `plate3_wellA2`.
@@ -139,7 +142,7 @@ plate3_wellA2 <-
 # save phasing
 plate3_wellA2 %>%
   select(chr, pos, ref, alt, hap_A_type, hap_B_type, hap_A_vaf, hap_B_vaf) %>%
-  saveRDS("out/phase_snps/phase_snps_cache/plate3_wellA2_phased_snps.rds")
+  saveRDS(file.path(out_dir, "plate3_wellA2_phased_snps.rds"))
 ```
 
 Now, we visualise the phased SNPs for `plate3_wellA2` in a BAF plot.
@@ -168,9 +171,10 @@ phased_loh_snps <-
   })
 
 # save phased snps
-saveRDS(phased_loh_snps, "out/phase_snps/phased_loh_genotyped_chr1_snps.rds")
+phased_loh_snps %>%
+  saveRDS(file.path(out_dir, "phased_loh_genotyped_chr1_snps.rds"))
 
-# # save phased baf plots
+# save phased baf plots
 purrr::walk2(names(phased_loh_snps), phased_loh_snps, function(id_i, i) {
   p <- plot_baf(i) + ggtitle(id_i)
   print(p)
@@ -279,5 +283,5 @@ breakpoints_and_haps %>%
 
 # save breakpoints
 breakpoints_and_haps %>%
-  readr::write_tsv(file.path(params$cache_path, "breakpoints_and_haps.tsv"))
+  readr::write_tsv(file.path(out_dir, "breakpoints_and_haps.tsv"))
 ```

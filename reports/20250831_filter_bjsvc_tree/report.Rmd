@@ -241,15 +241,22 @@ Now we plot the tree with various annotations.
 ```{r plot_trees, fig.width = 10, fig.height = 10}
 # rename tips
 tree$tip.label <- cell_annots$cell_id_new
+saveRDS(tree, file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
 
 # plain tree
-plot(tree, cex = 0.7)
-axisPhylo(side = 1, backward = FALSE)
+par(family = "sans")
+plot(tree, cex = 0.7, font = 1)
+axisPhylo(side = 1, cex = 0.7, backward = FALSE)
+
+# plain tree with uniform branch lengths
+tree_collapsed <- tree
+tree_collapsed$edge.length <- rep(1, nrow(tree_collapsed$edge))
+plot(tree_collapsed)
 
 # tree coloured by celltype
 tip_cols <- ifelse(cell_annots$celltype_VDJ_recomb == "B cell", "blue",
             ifelse(cell_annots$celltype_VDJ_recomb == "alpha-beta T cell", "red", "grey"))
-plot(tree, tip.color = tip_cols, cex = 0.7)
+plot(tree, tip.color = tip_cols, cex = 0.7, font = 1)
 axisPhylo(side = 1, backward = FALSE)
 legend("topright",
        legend = c("B cell", "alpha-beta T cell", "not lymphocyte"),
@@ -262,8 +269,8 @@ legend("topright",
 tip_cols <- ifelse(cell_annots$biallelic_CD274 == "TRUE_Compound", "blue",
             ifelse(cell_annots$biallelic_CD274 == "TRUE_LOH", "#3ec83e",
             ifelse(cell_annots$biallelic_CD274 == "FALSE_Het", "red",
-            ifelse(cell_annots$biallelic_CD274 == "Unclear - 9p del + intronic", "purple",
-                   "grey"))))
+            ifelse(cell_annots$biallelic_CD274 == "Unclear - 9p del + intronic",
+                   "purple", "grey"))))
 plot(tree, tip.color = tip_cols, cex = 0.7)
 axisPhylo(side = 1, backward = FALSE)
 legend("topright",
@@ -289,8 +296,6 @@ legend("topright",
 Look at weird trifurcation.
 
 ```{r}
-
-
 # check nodes and edges
 tree_collapsed=tree
 tree_collapsed$edge.length=rep(1,nrow(tree_collapsed$edge))

@@ -19,12 +19,31 @@ ref <-
 ref[is.na(ref) | ref == 0] <- 0.00001
 ref <- t(t(ref) / colSums(ref))
 
-# add artefact signature ScF from petljak2019
+# add SBSblood from machado 2022
+machado <-
+  readr::read_tsv("data/signatures/machado_2022/S8_finalsignaturetable.tsv") %>%
+  tidyr::pivot_longer(cols = -c("Signature")) %>%
+  dplyr::mutate(Type = factor(paste0(substr(name, 1, 1), "[",
+                                     substr(name, 2, 2), ">",
+                                     substr(name, 6, 6), "]",
+                                     substr(name, 3, 3)),
+                        levels = full_vec)) %>%
+  dplyr::arrange(Type) %>%
+  tidyr::pivot_wider(names_from = "Signature", values_from = "value")
+ref <- cbind(ref, machado_2022_SBSblood = machado$SBSblood)
+
+# add artefact signature ScF from petljak 2019
 petljak <-
-  readr::read_tsv("data/signatures/petljak_2019/mmc1.tsv")
+  readr::read_tsv("data/signatures/petljak_2019/mmc1.tsv") %>%
+  dplyr::mutate(
+    Type = factor(paste0(substr(`Mutation Subtype`, 1, 1), "[",
+                         `Mutation Type`, "]",
+                         substr(`Mutation Subtype`, 3, 3)),
+                  levels = full_vec)) %>%
+  dplyr::arrange(Type)
 ref <- cbind(ref, petljak_2019_ScF = petljak$`SBS sc_F`)
 
-# add artefact signature ScB from lodato2018
+# add artefact signature ScB from lodato 2018
 lodato <-
   "data/signatures/lodato_2018/Lodato2018_SignatureData_Aging.csv" %>%
   readr::read_csv() %>%
@@ -36,5 +55,6 @@ ref <- cbind(ref, lodato_2018_ScB = lodato$B)
 
 # save ref
 ref %>%
-  write.table(file = "out/resolveome/signatures/cosmic_v3.4_ScF_ScB.txt",
-              sep = "\t", quote = FALSE)
+  write.table(
+    file = "out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.txt",
+    sep = "\t", quote = FALSE)

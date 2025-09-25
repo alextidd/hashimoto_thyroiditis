@@ -1,0 +1,142 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+
+# set ggplot presets
+theme_set(theme_classic())
+```
+
+# Parameters
+
+```{r params, echo = FALSE}
+params
+```
+
+# chr1 LOH BAF plots
+
+```{r load_snps, eval = T}
+# load loh cell ids
+loh_cell_ids <-
+  "data/resolveome/manual_inspection/PD63118.tsv" %>%
+  readr::read_tsv() %>%
+  filter((!chr_dropout | is.na(chr_dropout)) &
+         (!suspected_doublet | is.na(suspected_doublet)) &
+         loh_1p) %>%
+  pull(cell_id)
+
+# load snps
+loh_snps <-
+  readRDS("out/phase_snps/phase_snps_cache/loh_genotyped_chr1_snps.rds")
+
+# load phasing
+plate3_wellA2 <-
+  readRDS("out/phase_snps/phase_snps_cache/plate3_wellA2_phased_snps.rds")
+
+# phase snps
+phased_loh_snps <-
+  readRDS("out/phase_snps/phased_loh_genotyped_chr1_snps.rds")
+
+# load breakpoints
+breakpoints <-
+  readr::read_tsv("out/phase_snps/phase_snps_cache/breakpoints_and_haps.tsv") %>%
+  arrange(breakpoint) %>%
+  mutate(cell_id = gsub("_dna.*", "", id))
+
+# load shared clades
+shared_clades <-
+  readr::read_tsv("data/resolveome/shared_clades/shared_clades.tsv")
+```
+
+Now we plot this phasing in all cells.
+
+```{r plot_bafs, fig.width = 10, fig.height = 30}
+# get the final cells
+final_cells <-
+  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  readr::read_tsv()
+
+# pick independent events to plot
+shared_cell_ids <-
+  shared_clades %>%
+  group_by(clade) %>%
+  slice_head(n = 1) %>%
+  {.$cell_id}
+cells_to_plot <-
+  tibble::tibble(cell_id = loh_cell_ids) %>%
+  rowwise() %>%
+  mutate(shared = cell_id %in% shared_clades$cell_id,
+         shared_to_plot = cell_id %in% shared_cell_ids,
+         breakpoint = any(grepl(cell_id, breakpoints$id))) %>%
+  ungroup() %>%
+  filter(
+    # one cell per shared clade
+    !shared | shared_to_plot,
+    # only 1 cell full-arm event
+    cell_id != "plate10_wellG3")
+
+# prep data
+p_dat <-
+  phased_loh_snps %>%
+  bind_rows() %>%
+  filter(cell_id %in% cells_to_plot$cell_id) %>%
+  # order ids by breakpoint
+  left_join(breakpoints) %>%
+  arrange(breakpoint) %>%
+  mutate(id = forcats::fct_inorder(id)) %>%
+  filter(total_depth > 4) %>%
+  dplyr::mutate(mut_baf = 1 - mut_vaf, `pos (Mb)` = pos / 1e6) %>%
+  tidyr::pivot_longer(cols = c("mut_vaf", "mut_baf"), names_to = "vaf_type")
+
+# prep phased data
+p_dat_phased <-
+  p_dat %>%
+  filter(!is.na(hap_A_vaf) & vaf_type == "mut_vaf")
+
+# plot
+p_dat %>%
+  ggplot(aes(x = `pos (Mb)`, y = value)) +
+  # add baf points
+  ggrastr::geom_point_rast(size = 0.05, alpha = 0.05) +
+  # add phased points
+  ggrastr::geom_point_rast(data = p_dat_phased, aes(y = hap_A_vaf),
+                           colour = "#e03ba9", size = 0.1) +
+  ggrastr::geom_point_rast(data = p_dat_phased, aes(y = hap_B_vaf),
+                           colour = "#00ccff", size = 0.1) +
+  # add line at TNFRSF14
+  geom_vline(xintercept = 2487078 / 1e6) +
+  # facet
+  facet_wrap(~ id, ncol = 1) +
+  theme_void()
+```
