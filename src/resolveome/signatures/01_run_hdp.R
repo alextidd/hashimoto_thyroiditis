@@ -1,4 +1,15 @@
-# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M50000 -R 'span[hosts=1] select[mem>50000] rusage[mem=50000]' -J resolveome_sequoia_02_extract_signatures -o log/%J_resolveome_sequoia_02_extract_signatures.out -e log/%J_resolveome_sequoia_02_extract_signatures.err 'Rscript src/resolveome/sequoia/02_extract_signatures.R'
+# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M50000 -R 'span[hosts=1] select[mem>50000] rusage[mem=50000]' -J resolveome_signatures_01_run_hdp -o log/%J_resolveome_signatures_01_run_hdp.out -e log/%J_resolveome_signatures_01_run_hdp.err 'Rscript src/resolveome/signatures/01_run_hdp.R'
+
+# parameters
+mut_cols <- rep(c("dodgerblue", "black", "red", "grey70",
+                  "olivedrab3", "plum2"), each = 16)       
+sigs_to_exclude <-
+  c("petljak_2019_ScF", "SBS1", "SBS5", "SBS19")
+
+# dirs
+seq_dir <- "out/resolveome/sequoia/blood/"
+out_dir <- file.path("out/resolveome/signatures/hdp/blood/")
+dir.create(out_dir, showWarnings = FALSE)
 
 # libraries
 library(magrittr)
@@ -46,16 +57,16 @@ mutlist_to_96_contexts <- function(mutlist, genomeFile) {
           collapse = "")
       }
     }
-    freqs <- table(paste(mutations$sub, 
+    freqs <- table(paste(mutations$sub,
                        paste(substr(mutations$trinuc_ref_py, 1, 1), 
                              substr(mutations$trinuc_ref_py, 3, 3), 
-                             sep = "-"), 
+                             sep = "-"),
                        sep = ","))
     sub_vec <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
     ctx_vec <- paste(rep(c("A", "C", "G", "T"), each = 4), 
-                    rep(c("A", "C", "G", "T"), times = 4), sep = "-")
+                     rep(c("A", "C", "G", "T"), times = 4), sep = "-")
     full_vec <- paste(rep(sub_vec, each = 16), 
-                     rep(ctx_vec, times = 6), sep = ",")
+                      rep(ctx_vec, times = 6), sep = ",")
     freqs_full <- freqs[full_vec]
     freqs_full[is.na(freqs_full)] <- 0
     names(freqs_full) <- full_vec
@@ -66,12 +77,6 @@ mutlist_to_96_contexts <- function(mutlist, genomeFile) {
   rownames(trinuc_mut_mat) <- samples
   return(trinuc_mut_mat)
 }
-
-# dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
-out_subdir <- "20250924"
-out_dir <- file.path("out/resolveome/signatures/", out_subdir)
-dir.create(out_dir, showWarnings = FALSE)
 
 # read muts per branch
 muts_per_branch <-
@@ -105,7 +110,7 @@ write.table(key_table, file.path(out_dir, "key_table.txt"))
 freq <- table(key_table$Patient)
 
 # hdp hierarchy setup:
-# - level 0: global base distribution (shared across all patients)  
+# - level 0: global base distribution (shared across all patients)
 # - level 1: patient-level distributions (one per patient)
 # - level 2: sample-level distributions (individual samples/branches)
 hdp_mut <-
@@ -233,10 +238,10 @@ freq <- table(key_table$Group)
 dp_distn <- comp_dp_distn(hdp_multi_chains)
 ndp <- nrow(dp_distn$mean)
 ncomp <- ncol(dp_distn$mean)
-mean_assignment <- t(dp_distn$mean[
-  length(freq) + 1 + 1:nrow(trinuc_mut_mat), , drop = FALSE])
-colnames(mean_assignment) <- rownames(trinuc_mut_mat)
-write.table(mean_assignment, file.path(out_dir, "mean_assignment_hdp.txt"))
+exposures <- t(dp_distn$mean[length(freq) + 1 + 1:nrow(trinuc_mut_mat), ,
+                             drop = FALSE])
+colnames(exposures) <- rownames(trinuc_mut_mat)
+write.table(exposures, file.path(out_dir, "mean_assignment_hdp.txt"))
 
 # extract signature profiles (96-context distributions)
 hdp_sigs <- as.data.frame(t(comp_categ_distn(hdp_multi_chains)$mean))
@@ -249,16 +254,8 @@ write.table(hdp_sigs, file.path(out_dir, "hdp_sigs.txt"))
 # compare extracted signatures to known cosmic signatures using
 # cosine similarity and deconvolve them into known signature components
 
-mut_cols <- rep(c("dodgerblue", "black", "red", "grey70",
-                  "olivedrab3", "plum2"), each = 16)
-
-# load extracted hdp signatures
-hdp_sigs <- read.table(file.path(out_dir, "hdp_sigs.txt"))
-
 # load cosmic reference signatures + wga artefacts
-sigs_to_exclude <-
-  c("petljak_2019_ScF", "lodato_29018_ScB", "machado_2022_SBSblood")
-ref <- read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.txt")
+ref <- read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv")
 ref <- ref[, !(colnames(ref) %in% sigs_to_exclude)]
 
 # calculate cosine similarity between hdp and reference signatures
@@ -289,13 +286,14 @@ dev.off()
 # decompose complex hdp signatures into linear combinations of
 # known reference signatures using expectation-maximization
 
-# define reference signatures of interest (cosmic + artefacts)
-gdsigs <- c("SBS1", "SBS4", "SBS5", "SBS7a", "SBS7b", "SBS7c",
+# define reference signatures of interest (normal somatic + artefacts)
+gdsigs <- c("machado_2022_SBSblood", "SBS4", "SBS7a", "SBS7b", "SBS7c",
             "SBS2", "SBS13", "SBS16", "SBS18", "SBS92",
             "SBS9", "SBS17a", "SBS17b", "SBS34", "SBS41",
             "SBS40a", "SBS40c", "SBS88", "lodato_2018_ScB")
 
-add <- "v1" # version identifier for output files
+# version identifier for output files
+add <- "v1"
 
 signatures <- t(ref[, gdsigs])
 sample_list <- paste0("N", c(0:(ncol(hdp_sigs) - 1)))
@@ -413,7 +411,7 @@ for (s in sigs_to_deconv) {
           main = paste0("HDP ", s), names.arg = "")
 
   # reconstructed signature
-  barplot(reconsbs, col = mut_cols, 
+  barplot(reconsbs, col = mut_cols,
           main = paste0("reconstituted ", s, " cosine similarity to original: ",
                         round(cosine_reconst, digits = 2)))
 
@@ -434,24 +432,23 @@ for (s in sigs_to_deconv) {
 # map signature activities onto the phylogenetic tree to show
 # how mutational processes changed during tissue evolution
 
-exposures <- read.table(file.path(out_dir, "mean_assignment_hdp.txt"))
-all_cols <- brewer.pal(n = nrow(exposures), "Set3")
+# load tree
 tree <-
-  ape::read.tree(file.path(seq_dir, "Patient_snv_tree_with_branch_length.tree"))
+  ape::read.tree(file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
 tree_df <- as.data.frame(fortify(tree))
-samples <- colnames(exposures)
 
-sigs <- rownames(exposures)
-names(all_cols) <- sigs
+# get exposure colours
+all_cols <- brewer.pal(n = nrow(exposures), "Set3")
+names(all_cols) <- rownames(exposures)
 
 # create tree plot with signature exposures colored along branches
-pdf(file.path(out_dir, "tree_with_branch_length_coloured_final.pdf"),
-    height = 11, width = 4)
-plot(tree, label.offset = 0.01 * max(tree_df$x), show.tip.label = FALSE)
+pdf(file.path(out_dir, "tree_with_branch_length_hdp.pdf"),
+    height = 10, width = 10)
+plot(tree, label.offset = 0.01 * max(tree_df$x), cex = 0.7)
 
 # for each sample, draw rectangles showing signature proportions
-for (k in seq_along(samples)) {
-  n <- as.numeric(substr(samples[k], 9, nchar(samples[k])))
+for (sample in colnames(exposures)) {
+  n <- as.numeric(substr(sample, 9, nchar(sample)))
   x_end <- tree_df$x[n]
   x_start <- tree_df$x[tree_df$parent[n]]
   x_intv <- x_end - x_start
@@ -459,16 +456,18 @@ for (k in seq_along(samples)) {
   tipnum <- sum(tree_df$isTip)
 
   # stack signature exposures proportionally along branch length
-  for (s in sigs) {
-    x_end <- x_start + exposures[s, samples[k]] * x_intv
+  for (sig in rownames(exposures)) {
+    x_end <- x_start + exposures[sig, sample] * x_intv
     rect(ybottom = y - min(0.015 * tipnum, 0.3),
          ytop = y + min(0.015 * tipnum, 0.3),
-         xleft = x_start, xright = x_end, col = all_cols[s], lwd = 0.25)
+         xleft = x_start, xright = x_end, col = all_cols[sig], lwd = 0.25)
     x_start <- x_end
   }
 }
 
+# axis and legend
 axisPhylo(side = 1, backward = FALSE)
-legend("topright", title = "signatures", legend = sigs,
+legend("topright", title = "signatures", legend = rownames(exposures),
        fill = all_cols, bty = "n", cex = 0.8, ncol = 1, xjust = 0.5)
+
 dev.off()

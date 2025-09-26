@@ -52,58 +52,6 @@ seq_dir <- "out/resolveome/sequoia/20250918/"
 params
 ```
 
-# Samplesheet
-
-```{r load_ss}
-# load manual inspection data
-man_insp <-
-  read_tsv("data/resolveome/manual_inspection/PD63118.tsv") %>%
-  dplyr::select(-run_id) %>%
-  # fix loh_1p
-  mutate(loh_1p = as.character(as.numeric(loh_1p)),
-         loh_9p = as.character(as.numeric(loh_9p)),
-         loh_9q = as.character(as.numeric(loh_9q)))
-
-# load samplesheet
-ss <-
-  file.path(Sys.getenv("LUSTRE_125"),
-            "projects/hashimoto_thyroiditis/data/bams",
-            "samplesheet_local.csv") %>%
-  read_csv() %>%
-  # add manual inspection data
-  inner_join(man_insp)
-
-# qc-passing cells
-ss_pass <-
-  ss %>%
-  filter((plate == 3 & !suspected_doublet & !chr_dropout) |
-         (plate == 10 &
-          (is.na(suspected_doublet) | !suspected_doublet) &
-          (is.na(chr_dropout) | !chr_dropout)))
-
-# get celltype annotations
-cts <-
-  ss_pass %>%
-  # synthesise celltype annotations from VDJ + SHM + CSR
-  mutate(
-    celltype_VDJ_SHM_CSR = case_when(
-      celltype_VDJ_recomb == "B cell" &
-        (celltype_SHM == "mature B cell" |
-         class_switch_recombination_CSR == TRUE) ~ "activated B",
-      celltype_VDJ_recomb == "B cell" & celltype_SHM == "not mature B cell" ~ "naive B",
-      celltype_VDJ_recomb == "alpha-beta T cell" ~ "T",
-      celltype_VDJ_recomb == "not lymphocyte" ~ "other",
-      TRUE ~ NA) %>%
-      factor(levels = c("activated B", "naive B", "T", "other"))) %>%
-  filter(!is.na(celltype_VDJ_SHM_CSR)) %>%
-  distinct(cell_id, celltype_VDJ_SHM_CSR)
-
-# subset samplesheet
-ss_annot <-
-  ss_pass %>%
-  inner_join(cts)
-```
-
 We plot the tree.
 
 ```{r tree, fig.width = 10, fig.height = 10}
@@ -125,10 +73,12 @@ cell_annots <-
       left_join(
         "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
           readr::read_tsv() %>%
-          mutate(cell_id_new = cell_ID, cell_id = well_ID)
+          mutate(cell_id_new = as.character(cell_ID), cell_id = well_ID)
       )
   )
+```
 
+```{r plot_tree, fig.width = 10, fig.height = 10}
 # tree with ids
 plot(tree, cex = 0.7)
 axisPhylo(side = 1, backward = FALSE)
@@ -139,124 +89,39 @@ tree_collapsed$edge.length <- rep(1, nrow(tree_collapsed$edge))
 plot(tree_collapsed)
 ```
 
-We look at the mutational signatures of various clades of interest.
+We load the mutations.
 
-```{r sigs, fig.width = 10, fig.height = 10}
-# load mutations assigned to cells
-mats <-
-  c("NV", "NR") %>%
-  purrr::set_names() %>%
-  purrr::map(function(i) {
-    file.path(seq_dir, paste0("Patient_both_", i, "_tree_all.txt")) %>%
-      read.table
-  })
-
-# load mutations assigned to tree
+```{r load_muts}
+# load mutations assigned to branches
 muts_to_branches <-
   file.path(seq_dir, "Patient_both_assigned_to_branches.txt") %>%
   readr::read_tsv() %>%
   janitor::clean_names()
-
-# get 96 contexts
-contexts <-
-  muts_to_branches %>%
-  muts_to_96_contexts(
-    fasta = "../../reference/gatk/GRCh38/Homo_sapiens_assembly38.fasta.gz")
-
-# get nodepaths
-tip_of_interest <- which(tree$tip.label == "plate10_wellE4_dna_run50382")
-path_nodes <- nodepath(tree, from = Ntip(tree) + 1, to = tip_of_interest)
-
-# function: get the mutational spectrum of the mrca edge of a list of tips
-get_edge_spectrum <- function(tree, muts_to_branches, edge_tips) {
-
-  if (length(edge_tips) > 1) {
-    # get mrca of clade
-    edge_mrca <- getMRCA(tree, edge_tips)
-    edge_of_interest <- which(tree$edge[, 2] == edge_mrca)
-  } else {
-    # get parent node of tip
-    edge_mrca <- which(tree$edge[, 2] == which(tree$tip.label == edge_tips))
-    edge_of_interest <- edge_mrca
-  }
-
-  # find the edge that ends at this node
-  edge_labels <- rep(NA, nrow(tree$edge))
-  edge_labels[edge_of_interest] <- "edge of interest"
-  tip_colours <- ifelse(tree$tip.label %in% edge_tips, "red", "black")
-  plot(tree, cex = 0.7, main = paste(edge_tips, collapse = ", "),
-       tip.color = tip_colours)
-  edgelabels(text = edge_labels, cex = 0.7, frame = "none", col = "red")
-  axisPhylo(side = 1, backward = FALSE)
-
-  # get mutations on that branch
-  edge_muts <-
-    muts_to_branches %>%
-    dplyr::filter(branch == edge_mrca) %>%
-    alexr::get_trinucs(
-      fasta = "../../reference/gatk/GRCh38/Homo_sapiens_assembly38.fasta.gz")
-
-  # plot trinucs
-  edge_muts %>% alexr::plot_trinucs()
-
-}
-
-# plot clade of 4
-get_edge_spectrum(
-  tree, muts_to_branches,
-  edge_tips = c("plate10_wellH5_dna_run50382", "plate3_wellE11_dna_run49882",
-                "plate10_wellA8_dna_run50382", "plate3_wellD4_dna_run49882"))
-
-# plot CD274 clade
-get_edge_spectrum(
-  tree, muts_to_branches,
-  edge_tips = c("plate10_wellF7_dna_run50382", "plate10_wellF6_dna_run50382"))
-
-# plot CD274 clade + outgroup
-get_edge_spectrum(
-  tree, muts_to_branches,
-  edge_tips = c("plate10_wellF7_dna_run50382", "plate10_wellF6_dna_run50382",
-                "plate10_wellC9_dna_run50382"))
-
-# # plot each CD274 tip
-# get_edge_spectrum(
-#   tree, muts_to_branches, edge_tips = "plate10_wellF7_dna_run50382")
-# get_edge_spectrum(
-#   tree, muts_to_branches, edge_tips = "plate10_wellF6_dna_run50382")
-```
-
-```{r plot_trinucs}
-# plot trinuc
-trinucs <-
-  ingroup_muts %>%
-  alexr::get_trinucs(
-    fasta = "../../reference/gatk/GRCh38/Homo_sapiens_assembly38.fasta.gz")
-
-trinucs %>%
-  alexr::plot_trinucs()
 ```
 
 Now we plot the tree with various annotations.
 
-```{r plot_trees, fig.width = 10, fig.height = 10}
+```{r plot_tree_relabel, fig.width = 10, fig.height = 10}
 # rename tips
-tree$tip.label <- cell_annots$cell_id_new
-saveRDS(tree, file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
+tree_relabel <- tree
+tree_relabel$tip.label <- cell_annots$cell_id_new
+write.tree(tree_relabel, file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
 
 # plain tree
 par(family = "sans")
-plot(tree, cex = 0.7, font = 1)
+plot(tree_relabel, cex = 0.7, font = 1)
 axisPhylo(side = 1, cex = 0.7, backward = FALSE)
 
 # plain tree with uniform branch lengths
-tree_collapsed <- tree
+tree_collapsed <- tree_relabel
 tree_collapsed$edge.length <- rep(1, nrow(tree_collapsed$edge))
 plot(tree_collapsed)
 
 # tree coloured by celltype
 tip_cols <- ifelse(cell_annots$celltype_VDJ_recomb == "B cell", "blue",
-            ifelse(cell_annots$celltype_VDJ_recomb == "alpha-beta T cell", "red", "grey"))
-plot(tree, tip.color = tip_cols, cex = 0.7, font = 1)
+            ifelse(cell_annots$celltype_VDJ_recomb == "alpha-beta T cell",
+                   "red", "grey"))
+plot(tree_relabel, tip.color = tip_cols, cex = 0.7, font = 1)
 axisPhylo(side = 1, backward = FALSE)
 legend("topright",
        legend = c("B cell", "alpha-beta T cell", "not lymphocyte"),
@@ -271,10 +136,11 @@ tip_cols <- ifelse(cell_annots$biallelic_CD274 == "TRUE_Compound", "blue",
             ifelse(cell_annots$biallelic_CD274 == "FALSE_Het", "red",
             ifelse(cell_annots$biallelic_CD274 == "Unclear - 9p del + intronic",
                    "purple", "grey"))))
-plot(tree, tip.color = tip_cols, cex = 0.7)
+plot(tree_relabel, tip.color = tip_cols, cex = 0.7)
 axisPhylo(side = 1, backward = FALSE)
 legend("topright",
-       legend = c("TRUE_Compound", "TRUE_LOH", "FALSE_Het", "Unclear - 9p del + intronic", "WT/-"),
+       legend = c("TRUE_Compound", "TRUE_LOH", "FALSE_Het",
+                  "Unclear - 9p del + intronic", "WT/-"),
        col    = c("blue", "#3ec83e", "red", "purple", "grey"),
        pch    = 19,
        pt.cex = 1,
@@ -283,7 +149,7 @@ legend("topright",
 # tree coloured by SHM
 tip_cols <- ifelse(cell_annots$celltype_SHM == "Mature B cell", "blue",
                    "red")
-plot(tree, tip.color = tip_cols, cex = 0.7)
+plot(tree_relabel, tip.color = tip_cols, cex = 0.7)
 axisPhylo(side = 1, backward = FALSE)
 legend("topright",
        legend = c("Mature B cell", "Not mature B cell"),
@@ -293,38 +159,188 @@ legend("topright",
        bty    = "n")
 ```
 
-Look at weird trifurcation.
+Now, we mark driver mutations on the tree.
 
-```{r}
-# check nodes and edges
-tree_collapsed=tree
-tree_collapsed$edge.length=rep(1,nrow(tree_collapsed$edge))
-plot(tree_collapsed)
+```{r plot_drivers_on_tree}
+# create tree df
+tree_df <- as.data.frame(ggtree::fortify(tree_relabel))
+
+# visualise edges and nodes
+plot(tree_collapsed, cex = 0.5)
 edgelabels(cex = 0.5)
 nodelabels(cex = 0.5)
-which(tree$tip.label %in% c("10", "11", "12"))
 
-# mut vafs
-weird_cells <-
-  c("plate10_wellA11_dna_run50382","plate10_wellF8_dna_run50382","plate10_wellC6_dna_run50382")
-muts_vafs <-
-  as.matrix(mats$NV / mats$NR) %>%
-  tibble::as_tibble(rownames = "mut_id") %>%
-  dplyr::select(mut_id, all_of(weird_cells)) %>%
-  tidyr::pivot_longer(cols = weird_cells, names_to = "id",
-                      values_to = "alt_vaf")
+# get shared clades
+shared_clades <-
+  readr::read_tsv("data/resolveome/shared_clades/shared_clades.tsv")
 
-muts_vafs_mat <- as.matrix(mats$NV / mats$NR)
-muts_vafs_mat <- muts_vafs_mat[, weird_cells]
-heatmap(muts_vafs_mat)
+# get genotyped mutations
+muts <-
+  # load genotyping
+  c("dna", "dnahyb") %>%
+  purrr::map(function(seq_type) {
+    file.path("out/resolveome/nf-resolveome", seq_type, "PD63118",
+              "genotyping/mutations/PD63118_annotated_mutations.tsv") %>%
+      readr::read_tsv() %>%
+      filter(gene %in% c("TNFRSF14", "CD274"))
+  }) %>%
+  # combine dna + dnahyb reads
+  bind_rows() %>%
+  mutate(cell_id = gsub("_dna.*", "", id)) %>%
+  group_by(chr, pos, ref, alt, gene, cell_id) %>%
+  summarise(alt_depth = sum(alt_depth), total_depth = sum(total_depth)) %>%
+  mutate(alt_vaf = alt_depth / total_depth) %>%
+  ungroup() %>%
+  # annotate new cell ids
+  inner_join(cell_annots) %>%
+  # positive mutations only
+  filter(alt_vaf > 0.2, alt_depth > 1)
 
-weird_muts <-
-  muts_to_branches %>%
-  filter(branch %in% c(127, 128, 56, 57, 58)) %>%
-  mutate(mut_id = paste(chr, pos, ref, alt, sep = "_")) %>%
-  left_join(muts_vafs)
+muts %>%
+  left_join(cell_annots) %>%
+  add_count(chr, pos, ref, alt) %>%
+  arrange(-n, chr, pos, ref, alt) %>%
+  dplyr::select(chr, pos, ref, alt, gene, cell_id_new, alt_depth, total_depth, alt_vaf, clade_ID, subclade_ID, n)
 
-weird_muts %>%
-  ggplot(aes(x = mut_id, y = id, fill = alt_vaf)) +
-  geom_tile()
+# get mrca edge of each shared mutations
+tips_ls <-
+  muts %>%
+  split(.$gene) %>%
+  purrr::map(function(gene_df) {
+    gene_df %>%
+      group_by(chr, pos, ref, alt) %>%
+      group_split() %>%
+      purrr::map(~ .x$cell_id_new)
+  })
+
+# function: plot mutations on the tree
+plot_phylo_muts <- function(tree, tips_ls) {
+
+  # get celltype colours
+  tip_cols_legend <-
+    c("B cell" = "#1515a4", "alpha-beta T cell" = "#9e0303",
+      "not lymphocyte" = "grey")
+  tip_cols <- tip_cols_legend[cell_annots$celltype_VDJ_recomb]
+
+  # get gene colours
+  if (length(tips_ls) == 1) {
+    gene_cols <- "orange"
+  } else if (length(tips_ls) == 2) {
+    gene_cols <- c("orange", "purple")
+  } else {
+    gene_cols <- RColorBrewer::brewer.pal(n = length(tips_ls), name = "Set1")
+  }
+  names(gene_cols) <- names(tips_ls)
+
+  # plot tree
+  par(family = "sans")
+  plot(tree, cex = 0.7, font = 1, tip.color = tip_cols)
+  coords <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+
+  # start list of edges
+  edges <- list()
+
+  purrr::walk2(names(tips_ls), tips_ls, function(gene, gene_tips) {
+
+    edges[[gene]] <<- list()
+
+    purrr::walk(gene_tips, function(tips) {
+
+      # get edge before tip or mrca node
+      if (length(tips) == 1) {
+        mrca_node <- which(tree$tip.label == tips)
+        edge <- which(tree$edge[, 2] == mrca_node)
+      } else {
+        mrca_node <- getMRCA(tree, tips)
+        edge <- which(tree$edge[, 2] == mrca_node)
+
+        # make sure edge descends to tips only
+        desc_tips <- extract.clade(tree, mrca_node)$tip.label
+        if (!all(desc_tips %in% tips)) {
+          # if not, then get edge before each tip
+          edge <-
+            tips %>%
+            purrr::map(function(tip) {
+              which(tree$edge[, 2] == which(tree$tip.label == tip))
+            }) %>%
+            unlist()
+        }
+      }
+
+      # add edge(s) to list of edges
+      edges[[gene]] <<- c(edges[[gene]], list(edge))
+
+      for (e in edge) {
+        # edge coordinates (parent -> child)
+        x0 <- coords$xx[tree$edge[e, 1]]
+        y0 <- coords$yy[tree$edge[e, 1]]
+        x1 <- coords$xx[tree$edge[e, 2]]
+        y1 <- coords$yy[tree$edge[e, 2]]
+        x_mid <- (x0 + x1) / 2
+        y_mid <- y1
+
+        # add points
+        points(x_mid, y_mid, pch = 19, col = gene_cols[gene], cex = 1)
+      }
+
+    })
+
+  })
+
+  # check if any edges are mutated in both genes
+  # intersect(unlist(edges[[1]]), unlist(edges[[2]]))
+  shared_edges <- Reduce(intersect, lapply(edges, unlist))
+  for (e in shared_edges) {
+    # edge coordinates (parent -> child)
+    x0 <- coords$xx[tree$edge[e, 1]]
+    y0 <- coords$yy[tree$edge[e, 1]]
+    x1 <- coords$xx[tree$edge[e, 2]]
+    y1 <- coords$yy[tree$edge[e, 2]]
+    x_mid <- (x0 + x1) / 2
+    y_mid <- y1
+
+    # add points
+    points(x_mid, y_mid, pch = 19, col = "#d2208b", cex = 1)
+    gene_cols <- c(gene_cols, "TNFRSF14 + CD274" = "#d2208b")
+  }
+
+  # add axis and legend
+  axisPhylo(side = 1, backward = FALSE)
+  legend("topright",
+         legend = c("Driver mutation", names(gene_cols), "Cell type", names(tip_cols_legend)),
+         text.font = c(2, rep(3, length(gene_cols)), 2, rep(1, length(tip_cols_legend))),
+         col    = c(NA, gene_cols, rep("black", length(tip_cols_legend) + 1)),
+         pch    = c(NA, rep(19, length(gene_cols)), NA, rep(95, length(tip_cols_legend))),
+         pt.cex = 1,
+         cex = 0.7,
+         bty    = "n",
+         text.col = c(rep("black", length(gene_cols) + 2),
+                      tip_cols_legend))
+
+}
+
+pdf("test.pdf", width = 10, height = 10)
+plot_phylo_muts(tree_relabel, tips_ls)
+plot_phylo_muts(tree_collapsed, tips_ls)
+dev.off()
+
+# plot tree
+pdf("test.pdf", width = 10, height = 10)
+plot(tree_relabel, label.offset = 0.01 * max(tree_df$x))
+
+# for each branch, draw rectangles showing signature proportions
+for (edge in unique(muts_to_branches$branch)) {
+  branch <- 8
+  x_end <- tree_df$x[n]
+  x_start <- tree_df$x[tree_df$parent[n]]
+  x_intv <- x_end - x_start
+  y <- node.height(tree_relabel)[n]
+  tipnum <- sum(tree_df$isTip)
+
+  # stack signature exposures proportionally along branch length
+  x_end <- x_start + x_intv / 2
+  rect(ybottom = y - min(0.015 * tipnum, 0.3),
+       ytop = y + min(0.015 * tipnum, 0.3),
+       xleft = x_start, xright = x_end, col = all_cols[s], lwd = 0.25)
+}
 ```

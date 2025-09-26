@@ -56,5 +56,5 @@ ref <- cbind(ref, lodato_2018_ScB = lodato$B)
 # save ref
 ref %>%
   write.table(
-    file = "out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.txt",
+    file = "out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv",
     sep = "\t", quote = FALSE)
