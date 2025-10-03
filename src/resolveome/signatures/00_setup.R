@@ -8,12 +8,20 @@ full_vec <- paste0(rep(c("A", "C", "G", "T"), each = 4), "[",
                    rep(c("A", "C", "G", "T"), times = 4))
 
 # load cosmic reference signatures
-ref <-
-  readr::read_tsv("../../reference/cosmic/COSMIC_v3.4_SBS_GRCh38.txt") %>%
-  dplyr::mutate(Type = factor(Type, levels = full_vec)) %>%
-  dplyr::arrange(Type) %>%
-  tibble::column_to_rownames("Type") %>%
-  as.matrix()
+refs <-
+  c("v2", "v3.4") %>%
+  purrr::set_names() %>%
+  purrr::map(function(v) {
+    readr::read_tsv(paste0("../../reference/cosmic/COSMIC_", v, "_SBS_GRCh38.txt")) %>%
+      dplyr::mutate(Type = factor(Type, levels = full_vec)) %>%
+      dplyr::arrange(Type) %>%
+      tibble::column_to_rownames("Type") %>%
+      as.matrix()
+  })
+
+# use v3.4 + Signature_17 from v2
+ref <- refs$v3.4
+ref <- cbind(ref, SBS17 = refs$v2[, "Signature_17"])
 
 # replace 0 with small value and normalise
 ref[is.na(ref) | ref == 0] <- 0.00001
@@ -27,10 +35,10 @@ machado <-
                                      substr(name, 2, 2), ">",
                                      substr(name, 6, 6), "]",
                                      substr(name, 3, 3)),
-                        levels = full_vec)) %>%
+                              levels = full_vec)) %>%
   dplyr::arrange(Type) %>%
   tidyr::pivot_wider(names_from = "Signature", values_from = "value")
-ref <- cbind(ref, machado_2022_SBSblood = machado$SBSblood)
+ref <- cbind(ref, machado_2022_SBSblood = machado$SBSblood, machado_2022_SignatureIg = machado$Signature.Ig)
 
 # add artefact signature ScF from petljak 2019
 petljak <-

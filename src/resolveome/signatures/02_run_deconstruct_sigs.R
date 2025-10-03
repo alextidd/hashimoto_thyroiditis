@@ -111,4 +111,6 @@ deconstruct_sigs(c("machado_2022_SBSblood", "petljak_2019_ScF", "SBS17a", "SBS17
 deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17a", "SBS17b", "SBS9"))
 deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17a", "SBS17b", "SBS9"))
 deconstruct_sigs(c("SBS1", "SBS5", "SBS9", "lodato_2018_ScB", "SBS17b", "SBS19", "SBS17a"))
+deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17", "SBS9"))
+deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17", "SBS9", "machado_2022_SignatureIg"))
 dev.off()

@@ -9,8 +9,8 @@ library(RColorBrewer)
 
 # dirs
 seq_dir <- "out/resolveome/sequoia/20250918/"
-hdp_dir <- "out/resolveome/signatures/hdp/blood"
-out_dir <- "out/resolveome/signatures/sigfit/blood"
+hdp_dir <- "out/resolveome/signatures/hdp/blood,17"
+out_dir <- "out/resolveome/signatures/sigfit/blood,17"
 dir.create(out_dir, showWarnings = FALSE)
 
 # reload objects
@@ -18,47 +18,55 @@ trinuc_mut_mat <-
   read.table(file.path(hdp_dir, "trinuc_mut_mat.txt"))
 ref <- read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv")
 tree <- ape::read.tree(file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
+tree_df <- as.data.frame(ggtree::fortify(tree))
 
 # define the final sigs
 final_sigs <-
-  c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB")
+  c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB")
 final_ref <- t(as.matrix(ref[, final_sigs]))
 
 # keep branches with >50 muts
 hdp_counts <- trinuc_mut_mat[rowSums(trinuc_mut_mat) > 50, ]
 
 # run sigfit on each branch separately
-fit <- list()
 sf_exposures <- list()
 for (k in rownames(hdp_counts)) {
   print(k)
-  sample_counts <- hdp_counts[k, , drop = FALSE]
 
-  # fit signatures
-  fit[[k]] <- fit_signatures(counts = sample_counts,
-                             signatures = final_ref,
-                             iter = 20000, warmup = 10000, seed = 1756,
-                             model = "poisson", chains = 4)
+  k_file <- file.path(out_dir, paste0("sigfit_exposures_", k, ".rds"))
+  if (file.exists(k_file)) {
+    sf_exposures[[k]] <- readRDS(k_file)
+  } else {
 
-  # extract sf_exposures
-  sf_exposures[[k]] <-
-    retrieve_pars(fit[[k]], par = "exposures", hpd_prob = 0.95)
+    # fit signatures
+    sample_counts <- hdp_counts[k, , drop = FALSE]
+    fit <- fit_signatures(counts = sample_counts,
+                          signatures = final_ref,
+                          iter = 20000, warmup = 10000, seed = 1756,
+                          model = "poisson", chains = 4)
 
-  # drop signatures with <5% contribution and refit
-  keep_sigs <- colnames(sf_exposures[[k]]$mean)[sf_exposures[[k]]$mean > 0.05]
-  if (length(keep_sigs) < ncol(sf_exposures[[k]]$mean)) {
-    fit[[k]] <- fit_signatures(counts = sample_counts,
-                               signatures = final_ref[keep_sigs, ],
-                               iter = 20000, warmup = 10000,
-                               model = "poisson", chains = 4)
     # extract sf_exposures
     sf_exposures[[k]] <-
-      retrieve_pars(fit[[k]], par = "exposures", hpd_prob = 0.95)
+      retrieve_pars(fit, par = "exposures", hpd_prob = 0.95)
+
+    # drop signatures with <5% contribution and refit
+    keep_sigs <- colnames(sf_exposures[[k]]$mean)[sf_exposures[[k]]$mean > 0.05]
+    if (length(keep_sigs) > 1 & length(keep_sigs) < ncol(sf_exposures[[k]]$mean)) {
+      fit <- fit_signatures(counts = sample_counts,
+                            signatures = final_ref[keep_sigs, , drop = FALSE],
+                            iter = 20000, warmup = 10000,
+                            model = "poisson", chains = 4)
+      # extract sf_exposures
+      sf_exposures[[k]] <-
+        retrieve_pars(fit, par = "exposures", hpd_prob = 0.95)
+    }
+
+    # save intermediate results
+    saveRDS(sf_exposures[[k]], k_file)
   }
 }
 
-# save fits
-# saveRDS(fit, file.path(out_dir, "sigfit_fits_per_branch.rds"))
+# save exposures
 saveRDS(sf_exposures, file.path(out_dir, "sigfit_exposures_per_branch.rds"))
 
 # combine exposures into matrix
@@ -66,6 +74,7 @@ sf_exp <-
   sf_exposures %>%
   purrr::map(~ .x$mean) %>%
   dplyr::bind_rows() %>%
+  dplyr::select(dplyr::all_of(final_sigs)) %>%
   t()
 sf_exp[is.na(sf_exp)] <- 0
 
@@ -78,7 +87,7 @@ all_cols <- brewer.pal(n = nrow(sf_exp), "Set3")
 names(all_cols) <- rownames(sf_exp)
 
 # create tree
-plot(tree, cex = 0.7)
+plot(tree, cex = 0.7, label.offset = 0.01 * max(tree_df$x))
 
 # for each sample, draw rectangles showing signature proportions
 for (sample in colnames(sf_exp)) {

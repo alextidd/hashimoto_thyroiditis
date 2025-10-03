@@ -130,3 +130,58 @@ plot_mut_trinucs <- function(p_dat, p_title = "") {
          subtitle = paste(format(nrow(p_dat), big.mark = ","), "mutations"),
          x = "", y = "number of mutations")
 }
+
+# function: get 96 muts context
+mutlist_to_96_contexts <- function(mutlist, genomeFile) {
+  library("GenomicRanges")
+  library("Rsamtools")
+  library("MASS")
+  samples <- unique(mutlist$SampleID)
+  trinuc_mut_mat <- matrix(0, ncol = 96, nrow = length(samples))
+  for (n in seq_along(samples)) {
+    s <- samples[n]
+    mutations <- as.data.frame(
+      mutlist[mutlist$SampleID == s, c("Chr", "Pos", "Ref", "Alt")])
+    colnames(mutations) <- c("chr", "pos", "ref", "mut")
+    mutations$pos <- as.numeric(mutations$pos)
+    mutations <- mutations[
+      (mutations$ref %in% c("A", "C", "G", "T")) &
+      (mutations$mut %in% c("A", "C", "G", "T")) &
+      mutations$chr %in% paste0("chr", c(1:22, "X", "Y")), ]
+    mutations$trinuc_ref <- as.vector(
+      scanFa(genomeFile,
+             GRanges(mutations$chr,
+                     IRanges(as.numeric(mutations$pos) - 1,
+                             as.numeric(mutations$pos) + 1))))
+    ntcomp <- c(T = "A", G = "C", C = "G", A = "T")
+    mutations$sub <- paste(mutations$ref, mutations$mut, sep = ">")
+    mutations$trinuc_ref_py <- mutations$trinuc_ref
+    for (j in 1:nrow(mutations)) {
+      if (mutations$ref[j] %in% c("A", "G")) { # purine base
+        mutations$sub[j] <- paste(ntcomp[mutations$ref[j]],
+                                 ntcomp[mutations$mut[j]], sep = ">")
+        mutations$trinuc_ref_py[j] <- paste(
+          ntcomp[rev(strsplit(mutations$trinuc_ref[j], split = "")[[1]])],
+          collapse = "")
+      }
+    }
+    freqs <- table(paste(mutations$sub,
+                         paste(substr(mutations$trinuc_ref_py, 1, 1),
+                               substr(mutations$trinuc_ref_py, 3, 3),
+                               sep = "-"),
+                         sep = ","))
+    sub_vec <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+    ctx_vec <- paste(rep(c("A", "C", "G", "T"), each = 4),
+                     rep(c("A", "C", "G", "T"), times = 4), sep = "-")
+    full_vec <- paste(rep(sub_vec, each = 16),
+                      rep(ctx_vec, times = 6), sep = ",")
+    freqs_full <- freqs[full_vec]
+    freqs_full[is.na(freqs_full)] <- 0
+    names(freqs_full) <- full_vec
+    trinuc_mut_mat[n, ] <- freqs_full
+    print(s)
+  }
+  colnames(trinuc_mut_mat) <- full_vec
+  rownames(trinuc_mut_mat) <- samples
+  return(trinuc_mut_mat)
+}

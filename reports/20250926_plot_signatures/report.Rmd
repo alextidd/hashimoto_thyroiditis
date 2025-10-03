@@ -1,0 +1,434 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  fig.align = "center"
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(ape)
+library(BSgenome.Hsapiens.UCSC.hg38)
+source("bin/utils.R")
+
+# set ggplot presets
+theme_set(theme_classic())
+
+# dirs
+seq_dir <- "out/resolveome/sequoia/20250918/"
+hdp_dir <- "out/resolveome/signatures/hdp/blood/"
+
+# set signatures of interest
+sigs_of_interest <-
+  c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB", "machado_2022_SignatureIg")
+```
+
+# Run deconstructSigs
+
+```{r deconstructsigs}
+# get cell annotations
+cell_annots <-
+  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  readr::read_tsv() %>%
+  mutate(
+    cell_ID = as.character(cell_ID),
+    celltype = case_when(celltype_SHM == "Mature B cell" ~ "Mature B cell",
+                         celltype_VDJ_recomb == "B cell" ~ "Non-mature B cell",
+                         TRUE ~ celltype_VDJ_recomb),
+    celltype = factor(celltype,
+                      levels = c("Mature B cell", "Non-mature B cell",
+                                 "alpha-beta T cell", "not lymphocyte")),
+    biallelic_CD274 = factor(biallelic_CD274,
+                             levels = c("TRUE_LOH", "TRUE_Compound",
+                                        "Unclear - 9p del + intronic",
+                                        "FALSE_Het", "WT", "-")))
+
+# load ref
+ref <-
+  read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv") %>%
+  t() %>%
+  as.data.frame()
+
+# load tree
+tree <-
+  read.tree(file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
+tree_df <-
+  as.data.frame(ggtree::fortify(tree))
+
+# load muts per branch
+muts_per_branch <-
+  file.path(seq_dir, "Patient_both_assigned_to_branches.txt") %>%
+  read.table(header = TRUE)
+
+# generate sigs input from branches
+genome <- BSgenome.Hsapiens.UCSC.hg38
+sigs_input <-
+  muts_per_branch %>%
+  janitor::clean_names() %>%
+  deconstructSigs::mut.to.sigs.input(bsg = genome, sample.id = "sample_id")
+
+# run deconstructSigs
+test <-
+  rownames(sigs_input) %>%
+  purrr::set_names() %>%
+  purrr::map(function(i) {
+    print(i)
+    deconstructSigs::whichSignatures(
+      tumor.ref = sigs_input,
+      signatures.ref = ref[sigs_of_interest, ],
+      sample.id = i,
+      contexts.needed = TRUE)
+  })
+
+# get the exposures
+sigs_exposures <-
+  test %>%
+  purrr::map(~ .x$weights %>% mutate(unknown = .x$unknown)) %>%
+  bind_rows() %>%
+  t()
+
+# map edges and tips
+edge_lengths <-
+  tibble::tibble(parent_node = tree$edge[, 1],
+                 child_node = tree$edge[, 2],
+                 n_muts = tree$edge.length)
+branch_to_tip_label <-
+  tibble::tibble(cell_ID = tree$tip.label) %>%
+  mutate(child_node = row_number())
+
+# get burden per branch
+sigs_exp_df <-
+  sigs_exposures %>%
+  tibble::as_tibble(rownames = "signature") %>%
+  tidyr::pivot_longer(-signature, names_to = "branch",
+                      values_to = "exposure") %>%
+  rowwise() %>%
+  mutate(child_node = as.numeric(gsub("Patient_", "", branch)),
+         edge = which(tree$edge[, 2] == child_node)) %>%
+  left_join(branch_to_tip_label) %>%
+  left_join(edge_lengths) %>%
+  mutate(n_muts_exp = n_muts * exposure,
+         signature = factor(signature,
+                            levels = c("unknown", rev(sigs_of_interest))))
+
+# get all edges leading to each tip
+paths <-
+  branch_to_tip_label %>%
+  rowwise() %>%
+  mutate(
+    child_node = paste(nodepath(tree, from = Ntip(tree) + 1, to = child_node),
+                       collapse = ",")) %>%
+  tidyr::separate_longer_delim(cols = child_node, delim = ",") %>%
+  mutate(child_node = as.numeric(child_node)) %>%
+  # add sigs
+  inner_join(
+    sigs_exp_df %>%
+      dplyr::select(child_node, parent_node, edge, n_muts, n_muts_exp,
+                    signature, exposure))
+
+# prep plotting data
+dat <-
+  paths %>%
+  # get total muts per cell
+  dplyr::select(-n_muts) %>%
+  left_join(
+    paths %>%
+      dplyr::distinct(cell_ID, edge, n_muts) %>%
+      group_by(cell_ID) %>%
+      summarise(n_muts = sum(n_muts))) %>%
+  group_by(cell_ID, signature, n_muts) %>%
+  summarise(n_muts_exp = sum(n_muts_exp), .groups = "drop") %>%
+  left_join(cell_annots)
+```
+
+# Plot exposures per cell
+
+```{r plot, fig.width = 15, fig.height = 10}
+# plot exposures per cell
+dat %>%
+  ungroup() %>%
+  arrange(-n_muts) %>%
+  mutate(cell_ID = forcats::fct_inorder(cell_ID),
+         prop_muts_exp = n_muts_exp / n_muts) %>%
+  tidyr::pivot_longer(cols = c(n_muts_exp, prop_muts_exp)) %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+  labs(y = "Proportion of mutations",
+       x = "Cell ID",
+       fill = "Signature") +
+  facet_grid(name ~ celltype, scales = "free", space = "free_x") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_x_discrete(guide = guide_axis(angle = -90)) +
+  ggtitle("Cell type")
+
+dat %>%
+  ungroup() %>%
+  arrange(-n_muts) %>%
+  mutate(cell_ID = forcats::fct_inorder(cell_ID),
+         prop_muts_exp = n_muts_exp / n_muts) %>%
+  tidyr::pivot_longer(cols = c(n_muts_exp, prop_muts_exp)) %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+  labs(y = "Proportion of mutations",
+       x = "Cell ID",
+       fill = "Signature") +
+  facet_grid(name ~ biallelic_CD274, scales = "free", space = "free_x") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_x_discrete(guide = guide_axis(angle = -90)) +
+  ggtitle("CD274 status")
+
+dat %>%
+  ungroup() %>%
+  arrange(-n_muts) %>%
+  mutate(cell_ID = forcats::fct_inorder(cell_ID),
+         prop_muts_exp = n_muts_exp / n_muts) %>%
+  tidyr::pivot_longer(cols = c(n_muts_exp, prop_muts_exp)) %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+  labs(y = "Proportion of mutations",
+       x = "Cell ID",
+       fill = "Signature") +
+  facet_grid(name ~ biallelic_TNFRSF14, scales = "free", space = "free_x") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_x_discrete(guide = guide_axis(angle = -90)) +
+  ggtitle("TNFRSF14 status")
+
+dat %>%
+  filter(celltype == "Mature B cell") %>%
+  ungroup() %>%
+  arrange(-n_muts) %>%
+  mutate(cell_ID = forcats::fct_inorder(cell_ID),
+         prop_muts_exp = n_muts_exp / n_muts) %>%
+  tidyr::pivot_longer(cols = c(n_muts_exp, prop_muts_exp)) %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+  labs(y = "Proportion of mutations",
+       x = "Cell ID",
+       fill = "Signature") +
+  facet_grid(name ~ biallelic_CD274, scales = "free", space = "free_x") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_x_discrete(guide = guide_axis(angle = -90)) +
+  ggtitle("CD274 status, mature B cells only")
+
+dat %>%
+  filter(celltype == "Mature B cell") %>%
+  ungroup() %>%
+  arrange(-n_muts) %>%
+  mutate(cell_ID = forcats::fct_inorder(cell_ID),
+         prop_muts_exp = n_muts_exp / n_muts) %>%
+  tidyr::pivot_longer(cols = c(n_muts_exp, prop_muts_exp)) %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+  labs(y = "Proportion of mutations",
+       x = "Cell ID",
+       fill = "Signature") +
+  facet_grid(name ~ biallelic_TNFRSF14, scales = "free", space = "free_x") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_x_discrete(guide = guide_axis(angle = -90)) +
+  ggtitle("TNFRSF14 status, mature B cells only")
+```
+
+# Plot burden per signature vs mutant status
+
+```{r burdens_per_sig, fig.height = 10}
+# prep data
+p_dat <-
+  dat %>%
+  # remove 8 from 7/8 clade (no counting burdens from same clade twice)
+  filter(celltype == "Mature B cell", cell_ID != "8") %>%
+  tidyr::pivot_longer(cols = c(n_muts, n_muts_exp)) %>%
+  mutate(name = case_when(name == "n_muts" ~ "total burden",
+                          TRUE ~ paste(signature, "burden"))) %>%
+  distinct(cell_ID, name, value, biallelic_CD274, biallelic_TNFRSF14) %>%
+  mutate(
+    `CD274 status` = case_when(
+      biallelic_CD274 %in% c("TRUE_LOH", "TRUE_Compound") ~ "mutant",
+      TRUE ~ "WT"),
+    `TNFRSF14 status` = case_when(
+      biallelic_TNFRSF14 %in% c("TRUE_LOH", "TRUE_Compound") ~ "mutant",
+      TRUE ~ "WT"),
+    status = paste("TNFRSF14", `TNFRSF14 status`, "\nCD274", `CD274 status`)
+  ) %>%
+  split(.$name)
+
+# function: plot burden by signature vs mutant status
+plot_burden_by_status <- function(p_dat_i, x, colour, title_suffix) {
+  comp <- unique(p_dat_i[, x, drop = TRUE])
+  if (length(comp) == 2) {
+    comp <- list(comp)
+  } else {
+    comp <- combn(comp, 2, simplify = FALSE)
+  }
+  p <-
+    p_dat_i %>%
+    ggplot(aes(x = .data[[x]], y = value)) +
+    geom_boxplot() +
+    scale_x_discrete(guide = guide_axis(angle = -45)) +
+    labs(title = unique(p_dat_i$name),
+         subtitle = paste0("burden by ", x, "\n", title_suffix)) +
+    ggpubr::stat_compare_means(comparison = comp)
+  if (!is.null(colour)) {
+    p <- p + ggbeeswarm::geom_beeswarm(aes(colour = .data[[colour]]), size = 0.7)
+  } else {
+    p <- p + ggbeeswarm::geom_beeswarm(size = 0.7)
+  }
+  if (length(comp) > 2) {
+    p <- p + ggpubr::stat_compare_means(label.y = max(p_dat_i$value) * 1.4)
+  }
+  p
+}
+
+# plot burden by signature vs tnfrsf14 status
+p_dat %>%
+  purrr::map(~ .x %>% filter(`CD274 status` == "WT") %>%
+               plot_burden_by_status("TNFRSF14 status", "biallelic_TNFRSF14",
+                                     "CD274-WT mature B cells only"))
+
+# plot burden by signature vs cd274 status
+p_dat %>%
+  purrr::map(~ plot_burden_by_status(.x, "CD274 status", "biallelic_CD274",
+                            "mature B cells only"))
+
+# plot burden by signature vs tnfrsf14/cd274 combined status
+p_dat %>%
+  purrr::map(~ plot_burden_by_status(.x, "status", NULL, "mature B cells only"))
+```
+
+# Plot aggregate spectra
+
+```{r spectra}
+# get spectrum per branch
+trinuc_mut_mat <- read.table(file.path(hdp_dir, "trinuc_mut_mat.txt"))
+trinuc_cols <- c("C>A" = "dodgerblue", "C>G" = "black", "C>T" = "red",
+                 "T>A" = "grey70", "T>C" = "olivedrab3", "T>G" = "plum2")
+
+# get spectrum per path
+muts_per_path <-
+  paths %>%
+  distinct(cell_ID, child_node, parent_node, edge, n_muts) %>%
+  mutate(Branch = child_node) %>%
+  left_join(cell_annots)
+
+# function: plot spectrum per group
+plot_spectrum_per_group <- function(muts_i, i) {
+  p <-
+    trinuc_mut_mat[paste0("Patient_", muts_i$Branch), ] %>%
+    colSums() %>%
+    tibble::enframe(name = "trinuc", value = "n_muts") %>%
+    mutate(trinuc = gsub("\\.", "", trinuc),
+           x = paste0(substr(trinuc, 3, 3), substr(trinuc, 1, 1), substr(trinuc, 4, 4)),
+           facet = paste0(substr(trinuc, 1, 1), ">", substr(trinuc, 2, 2))) %>%
+    ggplot(aes(x = x, y = n_muts, fill = facet)) +
+    geom_col() +
+    facet_grid(~ facet, scales = "free_x") +
+    scale_fill_manual(values = trinuc_cols) +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme_classic() +
+    theme(legend.position = "none",
+          axis.text.x = element_text(family = "Courier", angle = -90, hjust = 1, vjust = 0.5),
+          axis.title.x = element_blank()) +
+    ggtitle(i)
+  return(p)
+}
+```
+
+# Spectrum per celltype
+
+```{r spectrum_per_celltype, fig.width = 20}
+muts_per_ct <- muts_per_path %>% split(.$celltype)
+purrr::walk2(names(muts_per_ct), muts_per_ct, function(ct, muts_per_ct_i) {
+  p <-
+    plot_spectrum_per_group(muts_per_ct_i, ct)
+  print(p)
+})
+```
+
+# Spectrum per cell
+
+```{r spectrum_per_cell, fig.width = 20}
+muts_per_cell <- muts_per_path %>% split(.$cell_ID)
+purrr::walk2(names(muts_per_cell), muts_per_cell, function(cell_ID, muts_per_cell_i) {
+  p <-
+    plot_spectrum_per_group(muts_per_cell_i, cell_ID)
+  print(p)
+})
+```
+
+# Plot shared spectra
+
+```{r spectrum_shared}
+# get shared mutations
+muts_to_edges <-
+  paths %>%
+  distinct(cell_ID, child_node, parent_node, edge, n_muts) %>%
+  left_join(
+    muts_per_branch %>%
+      janitor::clean_names() %>%
+      dplyr::mutate(child_node = branch)) %>%
+  # add celltype annots
+  left_join(cell_annots)
+
+shared_trinucs <-
+  muts_to_edges %>%
+  group_by(chr, pos, ref, alt) %>%
+  filter(n_distinct(cell_ID) > 1, n_distinct(celltype) == 1) %>%
+  ungroup() %>%
+  split(.$celltype)
+
+purrr::walk2(names(shared_trinucs), shared_trinucs, function(i, trinucs_i) {
+  p <-
+    trinucs_i %>%
+    as.data.frame() %>%
+    deconstructSigs::mut.to.sigs.input(bsg = genome, sample.id = "sample_id") %>%
+    colSums() %>%
+    tibble::enframe(name = "trinuc", value = "n_muts") %>%
+    mutate(x = paste0(substr(trinuc, 1, 1), substr(trinuc, 3, 3), substr(trinuc, 7, 7)),
+            facet = substr(trinuc, 3, 5)) %>%
+    ggplot(aes(x = x, y = n_muts, fill = facet)) +
+    geom_col() +
+    facet_grid(~ facet, scales = "free_x") +
+    scale_fill_manual(values = trinuc_cols) +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme_classic() +
+    theme(legend.position = "none",
+          axis.text.x = element_text(family = "Courier", angle = -90, hjust = 1, vjust = 0.5),
+          axis.title.x = element_blank()) +
+    ggtitle(i)
+  print(p)
+})
+```

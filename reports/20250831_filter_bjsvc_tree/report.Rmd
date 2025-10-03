@@ -267,3 +267,19 @@ plot_phylo_muts(tree_relabel, tips_ls)
 # plot drivers, equal branch lengths
 plot_phylo_muts(tree_collapsed, tips_ls)
 ```
+
+Zoom in on early mutations.
+
+```{r plot_zoom, fig.height = 10, fig.width = 10}
+plot(tree_relabel, show.tip.label = FALSE, cex = 0.5, x.lim = c(0, 75))
+axis(side = 1, at = seq(0, 70, by = 10), labels = seq(0, 70, by = 10))
+coords <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+rect(xleft = 70, xright = 100,
+     ybottom = min(coords$yy) - 1,
+     ytop = max(coords$yy) + 1,
+     col = "white", border = "white")
+text(x = 70,
+     y = coords$yy[1:length(tree_relabel$tip.label)],
+     labels = tree_relabel$tip.label,
+     pos = 4, cex = 0.5)
+```

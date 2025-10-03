@@ -1,17 +1,28 @@
 # cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M50000 -R 'span[hosts=1] select[mem>50000] rusage[mem=50000]' -J resolveome_signatures_01_run_hdp -o log/%J_resolveome_signatures_01_run_hdp.out -e log/%J_resolveome_signatures_01_run_hdp.err 'Rscript src/resolveome/signatures/01_run_hdp.R'
 
 # parameters
-mut_cols <- rep(c("dodgerblue", "black", "red", "grey70",
-                  "olivedrab3", "plum2"), each = 16)       
+mut_colours_96 <- rep(c("dodgerblue", "black", "red", "grey70",
+                        "olivedrab3", "plum2"), each = 16)
+mut_colours <- c("dodgerblue", "black", "red", "grey70",
+                 "olivedrab3", "plum2")
+
 sigs_to_exclude <-
-  c("petljak_2019_ScF", "SBS1", "SBS5", "SBS19")
+  c("petljak_2019_ScF", "SBS1", "SBS5", "SBS19", "SBS17a", "SBS17b")
+
+# define reference signatures of interest (normal somatic + artefacts)
+gdsigs <- c("machado_2022_SBSblood", "SBS4", "SBS7a", "SBS7b", "SBS7c",
+            "SBS2", "SBS13", "SBS16", "SBS18", "SBS92",
+            "SBS9", "SBS17", "SBS34", "SBS41",
+            "SBS40a", "SBS40c", "SBS88", "lodato_2018_ScB",
+            "machado_2022_SignatureIg")
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/blood/"
-out_dir <- file.path("out/resolveome/signatures/hdp/blood/")
+seq_dir <- "out/resolveome/sequoia/20250918/"
+out_dir <- file.path("out/resolveome/signatures/hdp/blood,17,Ig/")
 dir.create(out_dir, showWarnings = FALSE)
 
 # libraries
+source("bin/utils.R")
 library(magrittr)
 library(dplyr)
 library(data.table)
@@ -22,61 +33,6 @@ library(lattice)
 library(ape)
 library(ggtree)
 options(stringsAsFactors = FALSE)
-
-# function: get 96 muts context
-mutlist_to_96_contexts <- function(mutlist, genomeFile) {
-  library("GenomicRanges")
-  library("Rsamtools")
-  library("MASS")
-  samples <- unique(mutlist$SampleID)
-  trinuc_mut_mat <- matrix(0, ncol = 96, nrow = length(samples))
-  for (n in seq_along(samples)) {
-    s <- samples[n]
-    mutations <- as.data.frame(
-      mutlist[mutlist$SampleID == s, c("Chr", "Pos", "Ref", "Alt")])
-    colnames(mutations) <- c("chr", "pos", "ref", "mut")
-    mutations$pos <- as.numeric(mutations$pos)
-    mutations <- mutations[
-      (mutations$ref %in% c("A", "C", "G", "T")) &
-      (mutations$mut %in% c("A", "C", "G", "T")) &
-      mutations$chr %in% paste0("chr", c(1:22, "X", "Y")), ]
-    mutations$trinuc_ref <- as.vector(
-      scanFa(genomeFile, 
-             GRanges(mutations$chr, 
-                     IRanges(as.numeric(mutations$pos) - 1, 
-                             as.numeric(mutations$pos) + 1))))
-    ntcomp <- c(T = "A", G = "C", C = "G", A = "T")
-    mutations$sub <- paste(mutations$ref, mutations$mut, sep = ">")
-    mutations$trinuc_ref_py <- mutations$trinuc_ref
-    for (j in 1:nrow(mutations)) {
-      if (mutations$ref[j] %in% c("A", "G")) { # purine base
-        mutations$sub[j] <- paste(ntcomp[mutations$ref[j]], 
-                                 ntcomp[mutations$mut[j]], sep = ">")
-        mutations$trinuc_ref_py[j] <- paste(
-          ntcomp[rev(strsplit(mutations$trinuc_ref[j], split = "")[[1]])], 
-          collapse = "")
-      }
-    }
-    freqs <- table(paste(mutations$sub,
-                       paste(substr(mutations$trinuc_ref_py, 1, 1), 
-                             substr(mutations$trinuc_ref_py, 3, 3), 
-                             sep = "-"),
-                       sep = ","))
-    sub_vec <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
-    ctx_vec <- paste(rep(c("A", "C", "G", "T"), each = 4), 
-                     rep(c("A", "C", "G", "T"), times = 4), sep = "-")
-    full_vec <- paste(rep(sub_vec, each = 16), 
-                      rep(ctx_vec, times = 6), sep = ",")
-    freqs_full <- freqs[full_vec]
-    freqs_full[is.na(freqs_full)] <- 0
-    names(freqs_full) <- full_vec
-    trinuc_mut_mat[n, ] <- freqs_full
-    print(s)
-  }
-  colnames(trinuc_mut_mat) <- full_vec
-  rownames(trinuc_mut_mat) <- samples
-  return(trinuc_mut_mat)
-}
 
 # read muts per branch
 muts_per_branch <-
@@ -198,10 +154,8 @@ hdp_multi_chains <- hdp_extract_components(hdp_multi_chains)
 
 # set up trinucleotide context visualization
 trinuc_context <- sapply(strsplit(colnames(mut_count), "\\."), `[`, 4)
-group_factor <- as.factor(
-  rep(c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G"), each = 16))
-mut_colours <- c("dodgerblue", "black", "red", "grey70",
-                 "olivedrab3", "plum2")
+group_factor <-
+  as.factor(rep(c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G"), each = 16))
 
 # plot each extracted signature as a 96-context profile
 # component 0 is the "background" component (noise/artefacts)
@@ -285,12 +239,6 @@ dev.off()
 #------------------------------------------------------------------
 # decompose complex hdp signatures into linear combinations of
 # known reference signatures using expectation-maximization
-
-# define reference signatures of interest (normal somatic + artefacts)
-gdsigs <- c("machado_2022_SBSblood", "SBS4", "SBS7a", "SBS7b", "SBS7c",
-            "SBS2", "SBS13", "SBS16", "SBS18", "SBS92",
-            "SBS9", "SBS17a", "SBS17b", "SBS34", "SBS41",
-            "SBS40a", "SBS40c", "SBS88", "lodato_2018_ScB")
 
 # version identifier for output files
 add <- "v1"
@@ -407,11 +355,11 @@ for (s in sigs_to_deconv) {
   par(mar = c(1, 2, 4, 1))
 
   # original hdp signature
-  barplot(hdp_sigs[, s], col = mut_cols,
+  barplot(hdp_sigs[, s], col = mut_colours_96,
           main = paste0("HDP ", s), names.arg = "")
 
   # reconstructed signature
-  barplot(reconsbs, col = mut_cols,
+  barplot(reconsbs, col = mut_colours_96,
           main = paste0("reconstituted ", s, " cosine similarity to original: ",
                         round(cosine_reconst, digits = 2)))
 
@@ -419,7 +367,7 @@ for (s in sigs_to_deconv) {
   for (g in gdsigs) {
     add_plot <- ""
     if (grepl("SBS", g)) add_plot <- "pcawg "
-    barplot(ref[, g], col = mut_cols,
+    barplot(ref[, g], col = mut_colours_96,
             main = paste0(add_plot, g, " accounts for ",
                           round(alpha[g], digits = 2)))
   }
