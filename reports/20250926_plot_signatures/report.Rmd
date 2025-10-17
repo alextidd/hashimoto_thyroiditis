@@ -432,3 +432,39 @@ purrr::walk2(names(shared_trinucs), shared_trinucs, function(i, trinucs_i) {
   print(p)
 })
 ```
+
+# PCA
+
+```{r pca, fig.width = 10, fig.height = 8}
+# get mut spectrum per cell
+trinuc_mut_mat_per_cell <-
+  unique(muts_per_path$cell_ID) %>%
+  purrr::set_names() %>%
+  purrr::map(function(i) {
+    muts_per_path %>%
+      filter(cell_ID == i) %>%
+      pull(Branch) %>%
+      paste0("Patient_", .) %>%
+      {trinuc_mut_mat[., ]} %>%
+      colSums()
+  }) %>%
+  bind_rows() %>%
+  as.matrix()
+rownames(trinuc_mut_mat_per_cell) <- unique(muts_per_path$cell_ID)
+
+# run pca
+pca <- prcomp(trinuc_mut_mat_per_cell)
+
+# plot pc1 vs pc2, pc3 vs pc4
+p1 <-
+  tibble::as_tibble(pca$x, rownames = "cell_ID") %>%
+  left_join(cell_annots) %>%
+  ggplot(aes(x = PC1, y = PC2, colour = celltype)) +
+  geom_point()
+p2 <-
+  tibble::as_tibble(pca$x, rownames = "cell_ID") %>%
+  left_join(cell_annots) %>%
+  ggplot(aes(x = PC3, y = PC4, colour = celltype)) +
+  geom_point()
+p1 | p2
+```

@@ -215,8 +215,9 @@ purrr::walk2(names(phased_loh_snps), phased_loh_snps, function(id_i, i) {
     # get rolling average vaf delta
     arrange(pos) %>%
     mutate(`pos (Mb)` = pos / 1e6,
-           vaf_delta = case_when(present_hap == "hap_A_vaf" ~ hap_A_vaf - hap_B_vaf,
-                                 present_hap == "hap_B_vaf" ~ hap_B_vaf - hap_A_vaf),
+           vaf_delta = case_when(
+            present_hap == "hap_A_vaf" ~ hap_A_vaf - hap_B_vaf,
+            present_hap == "hap_B_vaf" ~ hap_B_vaf - hap_A_vaf),
            rolling_median_vaf_delta = slide_dbl(vaf_delta, median,
                                                 .before = 100, .after = 100),
            n = row_number())

@@ -239,7 +239,6 @@ purrr::walk(cois, function(cell_id_i) {
     # get snps
     phased_snps_i <- phased_snps[[cell_id_i]][[type_i]]
 
-    # min_depth <- ifelse(type_i == "dna", 5, 10); range <- 5e3
     for (min_depth in c(0, ifelse(type_i == "dna", 5, 10))) {
       for (range in c(5e3, 1e5, 2e5)) {
 
@@ -330,5 +329,120 @@ purrr::walk(cois, function(cell_id_i) {
       }
     }
   })
+})
+```
+
+# Plot DNA+DNAhyb BAFs in cells of interest
+
+```{r coi_dna_dnahyb, fig.width = 10}
+# plots bafs and transcripts
+purrr::walk(cois, function(cell_id_i) {
+
+  print(cell_id_i)
+
+  # get mutations
+  muts_i <-
+    muts[[cell_id_i]] %>%
+    filter(alt_vaf > 0.2, alt_depth > 1)
+
+  # combine reads from dna + dnahyb
+  phased_snps_i <-
+    phased_snps[[cell_id_i]] %>%
+    bind_rows(.id = "seq_type") %>%
+    group_by(chr, pos, ref, alt, cell_id, hap_A_type, hap_B_type, hap_A_vaf, hap_B_vaf) %>%
+    summarise(mut_depth = sum(mut_depth),
+              total_depth = sum(total_depth),
+              .groups = "drop") %>%
+    mutate(mut_vaf = mut_depth / total_depth)
+
+  for (min_depth in c(0, 10)) {
+    for (range in c(5e3, 1e5, 2e5)) {
+
+      # define x limits
+      x_limits <- c(min(exons$start) - range, max(exons$end) + range) / 1e6
+
+      # prep data
+      p_dat <-
+        phased_snps_i %>%
+        filter(total_depth >= min_depth,
+               pos > min(exons$start) - range,
+               pos < max(exons$end) + range) %>%
+        dplyr::mutate(mut_baf = 1 - mut_vaf,
+                      chr = factor(sub("^chr", "", chr),
+                                    levels = c(as.character(1:22), "X", "Y")),
+                      `pos (Mb)` = pos / 1e6) %>%
+        tidyr::pivot_longer(cols = c("mut_vaf", "mut_baf"),
+                            names_to = "vaf_type") %>%
+        tidyr::pivot_longer(cols = c("hap_A_vaf", "hap_B_vaf"),
+                            names_to = "haplotype", values_to = "hap_vaf") %>%
+        mutate(haplotype = case_when(is.na(hap_vaf) ~ "unphased",
+                                     TRUE ~ haplotype))
+
+      # plot bafs
+      p_baf <-
+        p_dat %>%
+        ggplot(aes(x = `pos (Mb)`, y = value)) +
+        # add box around TNFRSF14 position
+        geom_rect(data = exons, inherit.aes = FALSE,
+                  aes(xmin = start_mb, xmax = end_mb,
+                      ymin = -Inf, ymax = Inf),
+                  fill = "#f2f2f2") +
+        # add line at vaf = 0.5
+        geom_hline(yintercept = 0.5, colour = "red") +
+        # add baf points
+        geom_point(size = 0.8, alpha = 0.2) +
+        # add phased points
+        geom_point(aes(y = hap_vaf, colour = haplotype, alpha = haplotype),
+                    size = 1) +
+        scale_colour_manual(values = c(hap_A_vaf = "#e03ba9",
+                                        hap_B_vaf = "#00ccff",
+                                        unphased = "grey")) +
+        scale_alpha_manual(values = c(hap_A_vaf = 1,
+                                      hap_B_vaf = 1,
+                                      unphased = 0.2)) +
+        # axes
+        xlim(x_limits) +
+        scale_y_continuous(expand = c(0.01, 0.01)) +
+        theme_classic() +
+        theme(panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              legend.position = "none") +
+        labs(y = "VAF")
+
+      # exons
+      p_transcript <-
+        exons %>%
+        ggplot(aes(x = exon_chrom_start_mb, xend = exon_chrom_end_mb,
+                    y = gene, yend = gene)) +
+        geom_segment(linewidth = 5) +
+        geom_segment(aes(x = start_mb, xend = end_mb), linewidth = 1) +
+        geom_text(aes(x = end_mb, label = gene),
+                  hjust = 0, nudge_x = diff(x_limits) * 0.01) +
+        ggrepel::geom_label_repel(
+          data = muts_i,
+          aes(x = pos / 1e6, y = gene,
+              label = paste0(aachange, " (", round(alt_vaf, 2),
+                             ", ", alt_depth, "/", total_depth, ")")),
+              inherit.aes = FALSE, nudge_y = 0.5,
+              min.segment.length = 0, direction = "x") +
+        geom_point(data = muts_i,
+                   aes(x = pos / 1e6, y = gene),
+                   inherit.aes = FALSE,
+                   shape = 21, fill = "red", size = 3) +
+        labs(x = "pos (Mb)") +
+        xlim(x_limits) +
+        theme_void() +
+        theme(plot.title = element_text()) +
+        ggtitle(paste0(cell_id_i, " - dna + dnahyb (", range / 1e3,
+                       "kb around TNFRSF14, min depth = ", min_depth, ")"))
+
+
+      # plot
+      p <-
+        (p_transcript / plot_spacer() / p_baf) +
+        plot_layout(heights = c(1, -0.5, 4))
+      print(p)
+    }
+  }
 })
 ```

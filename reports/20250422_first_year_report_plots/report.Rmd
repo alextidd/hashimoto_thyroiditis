@@ -1,5 +1,5 @@
 ---
-title: "First year report plots"
+title: "`r params$title`"
 author: "Alexandra Tidd"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -12,18 +12,18 @@ output:
     toc_depth: 4
     theme: lumen
 params:
+  title: null
+  cache_path: null
   rerun: false
 ---
 
 ```{r setup, include = F, message = F, warning = F, echo = F}
-# rmarkdown::render('reports/20250422_first_year_report_plots.Rmd', output_file = '20250422_first_year_report_plots.html', output_dir = 'reports')
-
-# chunk options
-knitr::opts_knit$set(root.dir = "../")
+knitr::opts_knit$set(root.dir = "../..")
 knitr::opts_chunk$set(warning = FALSE,
                       dpi = 300,
                       message = FALSE,
-                      cache.path = "reports/20250422_first_year_report_plots_cache/")
+                      cache.path = params$cache_path,
+                      fig.align = "center")
 ```
 
 ```{r libraries, include = F, message = F, warning = F, echo = F}
@@ -100,13 +100,20 @@ n_seq_cells <- n_distinct(ss$cell_id)
 n_seq_dnahyb_cells <- ss %>% filter(seq_type == "dnahyb") %>% {n_distinct(.$cell_id)}
 n_seq_dna_cells <- ss %>% filter(seq_type == "dna") %>% {n_distinct(.$cell_id)}
 
+# final cell annotations
+final_cells <-
+  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  readr::read_tsv() %>%
+  dplyr::rename(cell_id_new = cell_ID, cell_id = well_ID)
+
 # qc-passing cells
 ss_pass <-
   ss %>%
   filter((plate == 3 & !suspected_doublet & !chr_dropout) |
          (plate == 10 &
           (is.na(suspected_doublet) | !suspected_doublet) &
-          (is.na(chr_dropout) | !chr_dropout)))
+          (is.na(chr_dropout) | !chr_dropout))) %>%
+  left_join(final_cells)
 n_pass_cells <- n_distinct(ss_pass$cell_id)
 ```
 
@@ -153,11 +160,6 @@ cts %>%
   theme(legend.position = "none") +
   labs(x = "VDJ + SHM + CSR celltype")
 ```
-
-Based on VDJ, SHM, and CSR annotations, 
-`r ct_stats[["activated B"]] + ct_stats[["naive B"]]` cells were B cells 
-(`r ct_stats[["activated B"]]` of which were activated), 
-`r ct_stats[["T"]]` were T cells, and `r ct_stats$other` were other celltypes. 
 
 # Sequencing metrics
 

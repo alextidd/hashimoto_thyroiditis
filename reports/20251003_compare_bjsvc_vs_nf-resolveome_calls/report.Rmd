@@ -1,0 +1,182 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(readr)
+
+# set ggplot presets
+theme_set(theme_classic())
+```
+
+# Parameters
+
+```{r params, echo = FALSE}
+params
+```
+
+We want to compare the calls made by `bj-somatic-variantcalling`, the filtered
+calls in the `Sequoia` output, and the driver genotyping calls made by
+`nf-resolveome`.
+
+# Load data
+
+```{r load_data}
+# load cell annotations
+cell_annots <-
+  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  read_tsv()
+
+# load samplesheet
+ss <-
+  file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data",
+            "bams/samplesheet_local.csv") %>%
+  read_csv() %>%
+  filter(cell_id %in% cell_annots$well_ID)
+
+# load bait panel genes
+drivers <-
+  "data/twist/Probes_merged_ok_combined_Sanger_Immune-v1_TE-91661256_hg19_gene_info.csv" %>%
+  read_csv() %>%
+  transmute(gene, chr, start = bed_start, end = bed_end)
+
+# initialise list of mut matrices
+muts <- list()
+
+# load mutations from nf-resolveome
+nfr_dir <- "out/resolveome/nf-resolveome/dna/PD63118/genotyping/mutations/"
+muts$nfr <-
+  file.path(nfr_dir, "PD63118_genotyped_mutations.tsv") %>%
+  read_tsv() %>%
+  transmute(mut_id = paste(chr, pos, ref, alt, sep = "_"),
+            NV = alt_depth, NR = total_depth, id) %>%
+  tidyr::pivot_longer(cols = c("NV", "NR")) %>%
+  tidyr::pivot_wider(names_from = id) %>%
+  split(.$name) %>%
+  purrr::map(~
+    .x %>%
+      dplyr::select(-name) %>%
+      tibble::column_to_rownames("mut_id") %>%
+      as.matrix())
+
+# load mutations from bj-somatic-variantcalling
+bj_dir <-
+  file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/out",
+            "resolveome/basejumper/bj-somatic-variantcalling/dna/PD63118/",
+            "PD63118_run/CUSTOM_CREATE_GROUP_LEVEL_TAB_DFS/")
+muts$bj <-
+  c("NV", "NR") %>%
+  purrr::set_names() %>%
+  purrr::map(function(type) {
+    paste0(bj_dir, "Mat_", type, "_null.tsv") %>%
+      read.table() %>%
+      as.matrix()
+  })
+
+# lift over bj mutations
+lo_mut_ids <-
+  tibble(mut_id = rownames(muts$bj$NV)) %>%
+  tidyr::separate_wider_delim(mut_id, delim = "_", cols_remove = FALSE,
+                              names = c("chr", "pos", "ref", "alt")) %>%
+  mutate(across(.cols = everything(), .fns = parse_guess)) %>%
+  alexr::lift_over(
+    lift_over_chain = "../../reference/liftover/hg38ToHg19.over.chain") %>%
+  mutate(mut_id_new = paste(chr, pos, ref, alt, sep = "_"))
+muts$bj <-
+  muts$bj %>%
+  purrr::map(function(x) {
+    x <- x[lo_mut_ids$mut_id, ]
+    rownames(x) <- lo_mut_ids$mut_id_new
+    x
+  })
+
+# load mutations from sequoia exact / beta binomial filtering
+seq_dir <- "out/resolveome/sequoia/20250918/"
+muts$seq_binom <-
+  c("NV", "NR") %>%
+  purrr::set_names() %>%
+  purrr::map(function(type) {
+    paste0(seq_dir, "Patient_both_", type, "_filtered_all.txt") %>%
+      read.table() %>%
+      as.matrix()
+  })
+
+# load mutations from sequoia fitted to tree
+muts$seq_tree <-
+  c("NV", "NR") %>%
+  purrr::set_names() %>%
+  purrr::map(function(type) {
+    paste0(seq_dir, "Patient_both_", type, "_tree_all.txt") %>%
+      read.table() %>%
+      as.matrix()
+  })
+
+# subset all matrices to qc-passing cells
+muts <-
+  muts %>%
+  purrr::map(function(x) {
+    purrr::map(x, function(y) {
+      cols_reorder <- ss %>% filter(seq_type == "dna") %>% pull(id)
+      y[, cols_reorder]
+    })
+  })
+
+# get mutations in drivers
+drivers_pos <-
+  drivers %>%
+  group_by(gene, chr) %>%
+  reframe(pos = start:end)
+muts_in_drivers <-
+  muts %>%
+  purrr::map(function(x) {
+    tibble(mut_id = rownames(x$NV))
+  }) %>%
+  bind_rows(.id = "method") %>%
+  tidyr::separate_wider_delim(mut_id, delim = "_", cols_remove = FALSE,
+                              names = c("chr", "pos", "ref", "alt")) %>%
+  mutate(across(.cols = everything(), .fns = parse_guess)) %>%
+  mutate(chr = gsub("^chr", "", chr)) %>%
+  inner_join(drivers_pos, by = c("chr", "pos"))
+
+# plot mutations per cell for each list
+muts %>%
+  purrr::map(~ tibble::enframe(colSums(.x$NV > 0))) %>%
+  bind_rows(.id = "method") %>%
+  ggplot(aes(x = name, y = value)) +
+  geom_col() +
+  facet_grid(method ~ ., scales = "free_y") +
+  scale_x_discrete(guide = guide_axis(angle = -90))
+bind_rows(tibble::enframe(colSums(muts$bj$NV > 0)),
+          tibble::enframe(colSums(muts$nfr$NV > 0)),
+          tibble::enframe(colSums(muts$seq$NV > 0)))
+```
