@@ -40,4 +40,4 @@ export LSB_EXCLUSIVE=Y
     -N at31@sanger.ac.uk
 )
 
-# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 05_bj-somatic-variantcalling_dnahyb_symlink -o "log/%J_05_bj-somatic-variantcalling_dnahyb_symlink.out" -e "log/%J_05_bj-somatic-variantcalling_dnahyb_symlink.err" "source ~/.bashrc && replace_symlinks cd $LUSTRE_125/projects/hashimoto_thyroiditis/out/basejumper/bj-somatic-variantcalling/dnahyb/"
+# bsub -q basement -M10000 -R 'span[hosts=1] select[mem>10000] rusage[mem=10000]' -J 05_bj-somatic-variantcalling_dnahyb_symlink -o "log/%J_05_bj-somatic-variantcalling_dnahyb_symlink.out" -e "log/%J_05_bj-somatic-variantcalling_dnahyb_symlink.err" "source ~/.bashrc && replace_symlinks $LUSTRE_125/projects/hashimoto_thyroiditis/out/resolveome/basejumper/bj-somatic-variantcalling/dnahyb/PD63118/"

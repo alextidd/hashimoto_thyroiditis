@@ -1,0 +1,5 @@
+__default__:
+  name: "{rule}"
+  queue: normal
+  memory: 5000
+  nCPUs: 1

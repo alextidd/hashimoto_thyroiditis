@@ -171,7 +171,7 @@ mosdepth <-
   ss_annot %>%
   transmute(
     seq_type, donor_id, id,
-    out_dir = file.path("out/nf-resolveome", seq_type, donor_id, "cells", id),
+    out_dir = file.path("out/resolveome/nf-resolveome", seq_type, donor_id, "cells", id),
     summary_txt = paste0(out_dir, "/mosdepth/", id, ".mosdepth.summary.txt"),
     dist = paste0(out_dir, "/mosdepth/", id, ".mosdepth.",
                   ifelse(seq_type == "dna", "global", "region"),
@@ -189,7 +189,7 @@ cov <-
       left_join(ss %>% dplyr::select(id, seq_type)) %>%
       filter(chr == "total" & seq_type == "dna" |
              chr == "total_region" & seq_type == "dnahyb") %>%
-      transmute(id, name = "mean coverage", value = mean)
+      transmute(id, name = "mean coverage", value = mean, seq_type)
     cov
   }, file = "cov.rds", rerun = params$rerun)
 
@@ -209,7 +209,7 @@ dist <-
 perc_cov <-
   dist %>%
   filter(cov == 1) %>%
-  transmute(id, name = "% genome covered", value = 100 * prop)
+  transmute(id, name = "% genome covered", value = 100 * prop, seq_type)
 ```
 
 We plot the coverage distribution.
@@ -230,53 +230,67 @@ We plot the allelic balance of the coverage.
 ```{r heterozygosity, eval = F}
 # get genotyped snps
 snps <-
-  xfun::cache_rds({
-    snps <-
-      c("dna", "dnahyb") %>%
-      purrr::set_names() %>%
-      purrr::map(~
-        read_tsv(file.path("out/nf-resolveome", .x,
-                 "PD63118/genotyping/snps/PD63118_genotyped_snps.tsv"))) %>%
-      bind_rows(.id = "seq_type") %>%
-      group_by(seq_type)
-    snps
-  }, file = "snps.rds", rerun = params$rerun)
+  c("dna", "dnahyb") %>%
+  purrr::set_names() %>%
+  purrr::map(~
+    read_tsv(file.path("out/resolveome/nf-resolveome", .x,
+              "PD63118/genotyping/snps/PD63118_genotyped_snps.tsv"))) %>%
+  bind_rows(.id = "seq_type") %>%
+  group_by(seq_type)
+snps
+saveRDS(snps, "reports/20250422_first_year_report_plots/snps.rds")
+
+# snps <- readRDS("reports/20250422_first_year_report_plots/20251021/20251021_first_year_report_plots_cache/snps_260c0696fa9f5a4d63ffd1a57a448e30.rds")
+# snps <-
+#   snps %>%
+#   split(.$seq_type)
+# snps$dnahyb <-
+#   snps$dnahyb %>%
+#   dplyr::select(-c(mut_depth, mut_vaf, donor_id, ref_depth))
+# snps$dna <-
+#   snps$dna %>%
+#   dplyr::mutate(alt_depth = mut_depth, alt_vaf = mut_vaf) %>%
+#   dplyr::select(-c(mut_depth, mut_vaf, donor_id, ref_depth))
+# snps <- bind_rows(snps)
+# saveRDS(snps, "reports/20250422_first_year_report_plots/snps.rds")
 
 # get binned vafs and depths
 p_snps_dat <-
   snps %>%
   dplyr::mutate(
-    mut_vaf = ifelse(total_depth == 0, 0, mut_vaf),
+    alt_vaf = ifelse(total_depth == 0, 0, alt_vaf),
     total_depth_bin = cut(
       total_depth, breaks = c(-Inf, 0, 10, 20, 50, 100, Inf),
       labels = c("0", "<10", "10–20", "20–50", "50–100", ">100")),
-    mut_vaf_bin = cut(mut_vaf, breaks = seq(0, 1, length.out = 30 + 1),
+    alt_vaf_bin = cut(alt_vaf, breaks = seq(0, 1, length.out = 30 + 1),
                       include.lowest = TRUE),
-    mut_vaf_min = stringr::str_extract(mut_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
-    mut_vaf_high = as.numeric(stringr::str_extract(mut_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
-    mut_vaf_mid = (mut_vaf_min + mut_vaf_high) / 2) %>%
-  dplyr::count(mut_vaf_bin, mut_vaf_mid, total_depth_bin)
-saveRDS(p_snps_dat, "reports/20250422_first_year_report_plots_cache/p_snps_dat.rds")
+    alt_vaf_min = stringr::str_extract(alt_vaf_bin, "[\\d\\.]+") %>% as.numeric(),
+    alt_vaf_high = as.numeric(stringr::str_extract(alt_vaf_bin, "(?<=,)\\s*[\\d\\.]+")),
+    alt_vaf_mid = (alt_vaf_min + alt_vaf_high) / 2) %>%
+  dplyr::count(alt_vaf_bin, alt_vaf_mid, total_depth_bin)
+saveRDS(p_snps_dat, "reports/20250422_first_year_report_plots/p_snps_dat.rds")
 
 # calculate allelic statuses
 allelic_statuses <-
   snps %>%
-  mutate(allelic_status = case_when(
-    ref_depth > 0 & mut_depth > 0 ~ "both",
-    ref_depth > 0 & mut_depth == 0 ~ "one",
-    ref_depth == 0 & mut_depth > 0 ~ "one",
-    ref_depth == 0 & mut_depth == 0 ~ "neither")) %>%
+  mutate(
+    ref_depth = total_depth - alt_depth,
+    allelic_status = case_when(
+      ref_depth > 0 & alt_depth > 0 ~ "both",
+      ref_depth > 0 & alt_depth == 0 ~ "one",
+      ref_depth == 0 & alt_depth > 0 ~ "one",
+      ref_depth == 0 & alt_depth == 0 ~ "neither")) %>%
   dplyr::count(id, allelic_status) %>%
   group_by(seq_type, id) %>%
   mutate(n_snps = sum(n), prop = n / n_snps)
-saveRDS(allelic_statuses, "reports/20250422_first_year_report_plots_cache/allelic_statuses.rds")
+saveRDS(allelic_statuses, "reports/20250422_first_year_report_plots/allelic_statuses.rds")
 ```
 
 ```{r plot_allelic_vaf_dist, fig.height = 8}
 p_snps_dat <-
-  readRDS("reports/20250422_first_year_report_plots_cache/p_snps_dat.rds")
+  readRDS("reports/20250422_first_year_report_plots/p_snps_dat.rds")
 p_snps_dat %>%
-  ggplot(aes(x = mut_vaf_mid, y = n, fill = total_depth_bin)) +
+  ggplot(aes(x = alt_vaf_mid, y = n, fill = total_depth_bin)) +
   geom_col() +
   scale_fill_viridis_d() +
   theme_classic() +
@@ -291,7 +305,7 @@ We plot the proportion of allelic dropout per cell.
 ```{r plot_allelic_dropout, fig.width = 10}
 # get prop allelic dropout
 allelic_statuses <-
-  readRDS("reports/20250422_first_year_report_plots_cache/allelic_statuses.rds")
+  readRDS("reports/20250422_first_year_report_plots/allelic_statuses.rds")
 allelic_dropout <-
   allelic_statuses %>%
   filter(allelic_status %in% c("one", "neither")) %>%
@@ -305,7 +319,7 @@ allelic_statuses %>%
     allelic_statuses %>%
       filter(seq_type == "dnahyb", allelic_status == "both") %>%
       ungroup() %>%
-      select(id, arr = prop)) %>%
+      transmute(cell_id = gsub("_dna.*", "", id), arr = prop)) %>%
   mutate(prop_lab = paste0(round(arr * 100) , "%")) %>%
   ggplot(aes(x = reorder(cell_id, -arr), y = prop, fill = allelic_status)) +
   geom_col(position = "stack") +
@@ -322,6 +336,7 @@ We plot the sequencing metrics.
 ```{r plot_coverage, fig.height = 10, fig.width = 15}
 p_cov_dat <-
   bind_rows(cov, perc_cov, allelic_dropout) %>%
+  ungroup() %>%
   inner_join(ss_annot) %>%
   mutate(name = case_when(seq_type == "dnahyb" & name == "% genome covered" ~ "% panel covered",
                           TRUE ~ name)) %>%
@@ -497,7 +512,7 @@ genos <-
   # get genotyping for dna and dnahyb
   filter(seq_type %in% c("dna", "dnahyb")) %>%
   distinct(seq_type, donor_id) %>%
-  mutate(genos = paste0("out/nf-resolveome/", seq_type, "/", donor_id,
+  mutate(genos = paste0("out/resolveome/nf-resolveome/", seq_type, "/", donor_id,
                         "/genotyping/mutations/", donor_id,
                         "_annotated_mutations.tsv")) %>%
   purrr::pmap(function(seq_type, donor_id, genos) {
@@ -509,11 +524,11 @@ genos <-
   }) %>%
   # pile up
   bind_rows() %>%
-  dplyr::select(-mut_vaf) %>%
+  dplyr::select(-alt_vaf) %>%
   group_by(across(-matches("_depth$"))) %>%
   summarise(across(matches("_depth$"), \(x) sum(x, na.rm = TRUE))) %>%
   ungroup() %>%
-  mutate(mut_vaf = mut_depth / total_depth) %>%
+  mutate(alt_vaf = alt_depth / total_depth) %>%
   # annotate mutations on 1p
   mutate(on_1p = ifelse(chr == "1" & pos < 123400000, TRUE, FALSE)) %>%
   # filter to only annotated, qc'ed cells
@@ -591,13 +606,13 @@ driver_genes %>%
   })
 ```
 
-We filter to `mut_vaf` > 0.2 and `mut_depth` > 1.
+We filter to `alt_vaf` > 0.2 and `alt_depth` > 1.
 
 ```{r genos_filter}
 # filter
 genos_filter <-
   genos %>%
-  filter(mut_vaf > 0.2, mut_depth > 1)
+  filter(alt_vaf > 0.2, alt_depth > 1)
 
 # save
 ss_annot %>%
@@ -835,7 +850,7 @@ We plot TNFRSF14 mutant calls in the 1p LOH and non-1p LOH cells.
 p <-
   genos_filter %>%
   filter(gene == "TNFRSF14") %>%
-  ggplot(aes(x = loh_1p, y = mut_vaf)) +
+  ggplot(aes(x = loh_1p, y = alt_vaf)) +
   geom_boxplot(outlier.colour = NA) +
   geom_jitter(height = 0, width = 0.1) +
   theme_classic()
@@ -847,15 +862,15 @@ We plot the VAF distribution of the mutations.
 ```{r}
 genos %>%
   left_join(ss) %>%
-  filter(mut_vaf > 0) %>%
-  ggplot(aes(x = mut_vaf, fill = on_1p & loh_1p == "1")) +
+  filter(alt_vaf > 0) %>%
+  ggplot(aes(x = alt_vaf, fill = on_1p & loh_1p == "1")) +
   geom_histogram() +
   theme_classic() +
   scale_y_continuous(expand = c(0, 0)) +
   scale_fill_brewer(palette = "Set1")
 genos_filter %>%
   left_join(ss) %>%
-  ggplot(aes(x = mut_vaf, fill = on_1p & loh_1p == "1")) +
+  ggplot(aes(x = alt_vaf, fill = on_1p & loh_1p == "1")) +
   geom_histogram() +
   lims(x = c(0, NA)) +
   theme_classic() +
@@ -864,8 +879,8 @@ genos_filter %>%
 genos_filter %>%
   mutate(groups = case_when(on_1p & loh_1p == "1" ~ "1p", TRUE ~ "other")) %>%
   group_by(groups) %>%
-  summarise(mean = mean(mut_vaf, na.rm = T), min = min(mut_vaf, na.rm = T),
-            max = max(mut_vaf, na.rm = T))
+  summarise(mean = mean(alt_vaf, na.rm = T), min = min(alt_vaf, na.rm = T),
+            max = max(alt_vaf, na.rm = T))
 ```
 
 ```{r plot_drivers_per_cell}
@@ -914,7 +929,7 @@ bj_muts_per_seq_type <- xfun::cache_rds({
     purrr::set_names() %>%
     purrr::map(function(seq_type) {
       # get nr and nv
-      c("mut_depth" = "NV", "total_depth" = "NR") %>%
+      c("alt_depth" = "NV", "total_depth" = "NR") %>%
         purrr::map(function(i) {
           paste0("out/BaseJumper/bj-somatic-variantcalling/", seq_type,
                 "/PD63118_run/SOMATIC_VARIANT_WORKFLOW_Heuristic_Filter_SEQUOIA", 
@@ -931,12 +946,12 @@ bj_muts_per_seq_type <- xfun::cache_rds({
         mutate(pos = as.numeric(pos)) %>%
         # calculate global VAFs
         group_by(mut_id) %>%
-        mutate(global_mut_depth = sum(mut_depth),
+        mutate(global_alt_depth = sum(alt_depth),
                global_total_depth = sum(total_depth),
-               global_mut_vaf = global_mut_depth / global_total_depth) %>%
+               global_alt_vaf = global_alt_depth / global_total_depth) %>%
         ungroup() %>%
         # get muts only
-        filter(mut_depth > 0)
+        filter(alt_depth > 0)
     }) %>%
     bind_rows(.id = "seq_type") %>%
     # filter to only annotated, qc'ed cells
@@ -985,8 +1000,8 @@ We visualise the global VAF distribution.
 
 ```{r plot_global_vaf}
 bj_muts_per_seq_type %>%
-  distinct(chr, mut_id, seq_type, global_mut_vaf) %>%
-  ggplot(aes(x = global_mut_vaf)) +
+  distinct(chr, mut_id, seq_type, global_alt_vaf) %>%
+  ggplot(aes(x = global_alt_vaf)) +
   geom_histogram(bins = 100) +
   lims(x = c(NA, 1)) +
   ggh4x::facet_nested(seq_type ~ ., scales = "free_y") +
@@ -999,15 +1014,15 @@ We filter out mutations with a global mutant VAF > 0.25.
 ```{r global_vaf_filter}
 bj_muts_per_seq_type_filter <-
   bj_muts_per_seq_type %>%
-  filter(global_mut_vaf < 0.25)
+  filter(global_alt_vaf < 0.25)
 ```
 
 We visualise the global VAF distribution after filtering.
 
 ```{r plot_global_vaf_filter}
 bj_muts_per_seq_type_filter %>%
-  distinct(chr, mut_id, seq_type, global_mut_vaf) %>%
-  ggplot(aes(x = global_mut_vaf)) +
+  distinct(chr, alt_id, seq_type, global_alt_vaf) %>%
+  ggplot(aes(x = global_alt_vaf)) +
   geom_histogram(bins = 100) +
   lims(x = c(NA, 1)) +
   ggh4x::facet_nested(seq_type ~ ., scales = "free_y") +
@@ -1021,22 +1036,22 @@ bj_muts <- xfun::cache_rds({
   bj_muts_per_seq_type_filter %>%
     group_by(cell_id) %>%
     mutate(seq_type = paste(sort(unique(seq_type)), collapse = "+")) %>%
-    group_by(across(-c(id, ends_with("_depth"), global_mut_vaf))) %>%
+    group_by(across(-c(id, ends_with("_depth"), global_alt_vaf))) %>%
     #group_by(chr, pos, ref, alt, mut_id, cell_id, seq_type) %>%
-    summarise(mut_depth = sum(mut_depth), total_depth = sum(total_depth)) %>%
+    summarise(alt_depth = sum(alt_depth), total_depth = sum(total_depth)) %>%
     ungroup() %>%
-    mutate(mut_vaf = mut_depth / total_depth)
+    mutate(alt_vaf = alt_depth / total_depth)
 }, file = "bj_muts.rds", rerun = params$rerun)
 ```
 
-We filter to `mut_vaf` > 0.3 and `mut_depth` > 5, and present in less than 50% 
+We filter to `alt_vaf` > 0.3 and `alt_depth` > 5, and present in less than 50% 
 of cells.
 
 ```{r filter_calls}
 bj_muts_filter <-
   xfun::cache_rds({
     bj_muts %>%
-      filter(mut_vaf > 0.3, mut_depth > 5) %>%
+      filter(alt_vaf > 0.3, alt_depth > 5) %>%
       group_by(chr, pos, ref, alt) %>%
       mutate(n_cells_w_mut = n_distinct(cell_id),
             n_cells = n_distinct(bj_muts$cell_id)) %>%
