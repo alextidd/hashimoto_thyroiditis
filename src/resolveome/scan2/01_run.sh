@@ -44,5 +44,7 @@ fi
 # run
 (
   cd $out_dir
-  scan2 run --cluster "bsub -q basement -M {resources.mem_mb} -R'span[hosts=1] select[mem>{resources.mem_mb}] rusage[mem={resources.mem_mb}]' -n {threads} -o %logdir/%J.out -e %logdir/%J.err"
+  scan2 run \
+    --joblimit 800 \
+    --cluster "bsub -q basement -M {resources.mem_mb} -R'span[hosts=1] select[mem>{resources.mem_mb}] rusage[mem={resources.mem_mb}]' -n {threads} -o %logdir/%J.out -e %logdir/%J.err"
 )

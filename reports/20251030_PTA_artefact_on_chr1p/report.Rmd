@@ -39,7 +39,8 @@ library(BSgenome.Hsapiens.UCSC.hg38)
 theme_set(theme_classic())
 
 # set palette
-pal <- c(true = "#91C7B1", artefact = "#B33951", breakpoint = "#E3D081")
+pal <- c(true = "#91C7B1", artefact = "#B33951",
+         breakpoint = "#E3D081", unclassified = "grey")
 ```
 
 In the PTA dataset, we have 23 independent chr1p CN-LOH events. The cells are 
@@ -67,11 +68,12 @@ breakpoints <-
 par_x <- c(60001:2699520, 154931044:155260560)
 
 # get mutations from the tree on chr1p / non-PAR x
+seq_dir <- "out/resolveome/sequoia/20250918/"
 muts <-
   c("NV", "NR") %>%
   purrr::set_names() %>%
   purrr::map(function(i) {
-    paste0("out/resolveome/sequoia/20250918/Patient_both_", i, "_tree_all.txt") %>%
+    paste0(seq_dir, "Patient_both_", i, "_tree_all.txt") %>%
       read.table() %>%
       tibble::as_tibble(rownames = "mut_id") %>%
       dplyr::filter(grepl("chr1_|chrX_", mut_id)) %>%
@@ -93,12 +95,14 @@ muts <-
   dplyr::mutate(alt_vaf = alt_depth / total_depth)
 ```
 
+### VAF distribution
+
 We plot the VAF distribution for chr1p and chrX variants.
 
 ```{r plot-vaf}
 p_dat <- split(muts, muts$chr)
 purrr::walk2(names(p_dat), p_dat, function(.x, .y) {
-  p <- alexr::plot_vaf_dist(.y) + ggtitle(.x)
+  p <- alexr::plot_vaf_dist(.y, p_title = .x)
   print(p)
 })
 ```
@@ -110,17 +114,18 @@ purrr::walk2(names(p_dat), p_dat, function(.x, .y) {
   p <-
     .y %>%
     dplyr::filter(alt_vaf < 0.9) %>%
-    alexr::plot_vaf_dist() +
-    ggtitle(.x)
+    alexr::plot_vaf_dist(p_title = paste(.x, "(VAF < 0.9)"))
   print(p)
 })
 ```
+
+### Variant classification
 
 We classify variants with VAF < 0.75 as artefactual, and those with VAF >= 0.9
 as true variants. We filter to those with a total depth > 5 to avoid low-depth
 noise.
 
-```{r estimate-fdr, fig.width = 12}
+```{r estimate-fdr}
 # get true and artefactual mutations
 classed_muts <-
   muts %>%
@@ -130,7 +135,11 @@ classed_muts <-
     TRUE ~ NA
   )) %>%
   dplyr::filter(!is.na(class), total_depth > 5)
+```
 
+We plot the number of true vs artefactual mutations per cell.
+
+```{r plot-fdr, fig.width = 12}
 # plot counts of true / artefactual mutations per cell
 p_dat <-
   classed_muts %>%
@@ -156,7 +165,7 @@ p_dat %>%
 
 We look at how the load of artefacts on chr1 varies with breakpoint length.
 
-```{r estimate-fdr-chr1}
+```{r plot-fdr-chr1}
 # scale FDR in chr1 to breakpoint length
 p_dat_2 <-
   p_dat %>%
@@ -198,7 +207,9 @@ classed_muts %>%
   scale_colour_manual(values = pal)
 ```
 
-We plot the trinucleotide spectra of these true and false variants.
+### Trinucleotide spectra
+
+We plot the trinucleotide spectra of these true and artefactual variants.
 
 ```{r plot-trinucs, fig.width = 10, fig.height = 5}
 # get artefactual trinucs
@@ -238,11 +249,115 @@ plot_trinucs <-
   }
 
 # plot trinucs
-plot_trinucs(colSums(artefact_trinucs)) + ggtitle("Artefactual variants (VAF < 0.75)")
-plot_trinucs(colSums(true_trinucs)) + ggtitle("True variants (VAF >= 0.9)")
+plot_trinucs(colSums(artefact_trinucs)) +
+  ggtitle("Artefactual variants (VAF < 0.75)")
+plot_trinucs(colSums(true_trinucs)) +
+  ggtitle("True variants (VAF >= 0.9)")
+```
+
+I also want to look at the spectrum of variants at very low VAF, as these are
+almost certainly PTA artefacts.
+
+```{r plot-trinucs-low-vaf, fig.width = 10, fig.height = 5}
+# get low-vaf artefactual trinucs
+artefact_trinucs_lo <-
+  classed_muts %>%
+  dplyr::filter(class == "artefact", nchar(ref) == 1, nchar(alt) == 1,
+                alt_vaf < 0.25) %>%
+  as.data.frame() %>%
+  deconstructSigs::mut.to.sigs.input(
+    sample.id = "id", bsg = BSgenome.Hsapiens.UCSC.hg38)
+
+# plot trinucs
+plot_trinucs(colSums(artefact_trinucs_lo)) +
+  ggtitle("Artefactual variants (VAF < 0.25)")
 ```
 
 For comparison, here is the "universal PTA artefact signature" identified by
 Luquette et al., 2022:
 
-![Universal PTA artefact signature from Luquette et al., 2022](universal_pta_artifact_signature.png)
+![](universal_pta_artifact_signature.png)
+
+### Phylogeny
+
+We map the proportion of true / artefactual mutations on each branch of the
+tree.
+
+```{r plot-tree, fig.width = 10, fig.height = 12}
+# load tree
+tree <-
+  file.path(seq_dir, "Patient_both_tree_with_branch_length.tree") %>%
+  ape::read.tree()
+tree_df <-
+  as.data.frame(ggtree::fortify(tree))
+
+# map edges and tips
+branch_to_tip_label <-
+  tibble::tibble(id = tree$tip.label) %>%
+  mutate(tip = row_number()) %>%
+  dplyr::left_join(
+    tibble::tibble(parent_node = tree$edge[, 1],
+                   tip = tree$edge[, 2],
+                   n_muts = tree$edge.length))
+
+# get all edges leading to each tip
+paths <-
+  branch_to_tip_label %>%
+  group_by(id, tip) %>%
+  reframe(child_node = ape::nodepath(tree, from = ape::Ntip(tree) + 1,
+                                     to = tip))
+
+# load mapping of branches to tree
+muts_to_branches <-
+  file.path(seq_dir, "Patient_both_assigned_to_branches.txt") %>%
+  readr::read_tsv() %>%
+  janitor::clean_names() %>%
+  dplyr::rename(child_node = branch) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(edge = which(tree$edge[, 2] == child_node)) %>%
+  dplyr::ungroup() %>%
+  # add mutations
+  dplyr::left_join(classed_muts %>% dplyr::select(chr, pos, ref, alt, id, class)) %>%
+  dplyr::mutate(class = dplyr::case_when(is.na(class) ~ "unclassified", TRUE ~ class)) %>%
+  dplyr::select(-id) %>%
+  dplyr::distinct() %>%
+  # add paths
+  dplyr::left_join(paths) %>%
+  # prop true / artefact / unclassified per branch
+  dplyr::add_count(id, child_node, tip, name = "total_muts") %>%
+  dplyr::count(id, child_node, tip, class) %>%
+  # add edges
+  rowwise() %>%
+  mutate(edge = which(tree$edge[, 2] == child_node)) %>%
+  ungroup()
+
+# plot signature attribution of branches
+tree_pal <- pal[c("unclassified", "artefact", "true")]
+plot(tree, label.offset = 0.01 * max(tree_df$x), cex = 0.7)
+ape::axisPhylo(side = 1, backward = FALSE)
+for (k in unique(muts_to_branches$child_node)) {
+  x_end <- tree_df$x[k]
+  x_start <- tree_df$x[tree_df$parent[k]]
+  x_intv <- x_end - x_start
+  y <- ape::node.height(tree)[k]
+  n_tips <- sum(tree_df$isTip)
+  for (s in names(tree_pal)) {
+    s_n <-
+      muts_to_branches %>%
+      dplyr::filter(child_node == k, class == s) %>%
+      dplyr::pull(n)
+    if (length(s_n)) {
+      x_end <- x_start + s_n
+      rect(ybottom = y - min(0.015 * n_tips, 0.3),
+            ytop = y + min(0.015 * n_tips, 0.3),
+            xleft = x_start, xright = x_end, col = pal[s], lwd = 0.25)
+      x_start <- x_end
+    }
+  }
+}
+legend("topright", title = "mut classification", legend = names(tree_pal),
+        fill = tree_pal, bty = "n", cex = 0.8, ncol = 1, xjust = 0.5)
+```
+
+This demonstrates that the artefactual variants are mostly confined to private
+branches, which is the expected artefact behaviour.
