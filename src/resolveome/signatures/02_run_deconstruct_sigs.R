@@ -2,6 +2,7 @@
 library(deconstructSigs)
 library(magrittr)
 library(dplyr)
+library(ape)
 
 # dirs
 seq_dir <- "out/resolveome/sequoia/20250918/"
@@ -34,7 +35,7 @@ sigs_input <-
   deconstructSigs::mut.to.sigs.input(bsg = genome, sample.id = "sample_id")
 
 # function: deconstruct signatures of interest
-deconstruct_sigs <- function(sigs_of_interest) {
+deconstruct_sigs <- function(sigs_of_interest, cols = NULL) {
 
   # run deconstructSigs
   test <-
@@ -57,13 +58,18 @@ deconstruct_sigs <- function(sigs_of_interest) {
     t()
 
   # colour signatures
-  if (nrow(sigs_exposures) == 2) {
-    all_cols <- c("#ffcc6d", "#b56de1")
+  if (!is.null(cols)) {
+    all_cols <- cols
+    all_cols["unknown"] <- "grey"
   } else {
-    all_cols <- RColorBrewer::brewer.pal(n = nrow(sigs_exposures), "Set3")
+    if (nrow(sigs_exposures) == 2) {
+      all_cols <- c("#ffcc6d", "#b56de1")
+    } else {
+      all_cols <- RColorBrewer::brewer.pal(n = nrow(sigs_exposures), "Set3")
+    }
+    names(all_cols) <- rownames(sigs_exposures)
+    all_cols["unknown"] <- "grey"
   }
-  names(all_cols) <- rownames(sigs_exposures)
-  all_cols["unknown"] <- "grey"
 
   # colour tips by celltype
   cell_annots <-
@@ -107,10 +113,20 @@ deconstruct_sigs <- function(sigs_of_interest) {
 pdf(file.path(out_dir, "tree_with_branch_length_deconstruct_sigs.pdf"), height = 10, width = 10)
 deconstruct_sigs(c("machado_2022_SBSblood", "petljak_2019_ScF"))
 deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB"))
-deconstruct_sigs(c("machado_2022_SBSblood", "petljak_2019_ScF", "SBS17a", "SBS17b", "SBS9"))
-deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17a", "SBS17b", "SBS9"))
-deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17a", "SBS17b", "SBS9"))
-deconstruct_sigs(c("SBS1", "SBS5", "SBS9", "lodato_2018_ScB", "SBS17b", "SBS19", "SBS17a"))
-deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17", "SBS9"))
-deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB", "SBS17", "SBS9", "machado_2022_SignatureIg"))
+deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "petljak_2019_ScF"))
+deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
+deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
+deconstruct_sigs(c("SBS1", "SBS5", "SBS19", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
+deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB"))
+deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17", "machado_2022_SignatureIg", "lodato_2018_ScB"))
+dev.off()
+
+pdf(file.path(out_dir, "tree_with_branch_length_deconstruct_sigs.pdf"), height = 10, width = 10)
+deconstruct_sigs(
+  c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "petljak_2019_ScF"),
+  cols = c("machado_2022_SBSblood" = "#912F40",
+           "SBS9" = "#F4A261",
+           "SBS17a" = "#2A9D8F",
+           "SBS17b" = "#264653",
+           "petljak_2019_ScF" = "#DC6ACF"))
 dev.off()
