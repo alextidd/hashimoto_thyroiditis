@@ -7,7 +7,7 @@ module load sigprofiler/extractor-1.1.24-GRCh38-GRCh37
 module load sigprofiler/matrixGenerator-1.2.30
 
 # dirs
-seq_dir=out/resolveome/sequoia/20250918/
+seq_dir=out/resolveome/sequoia/
 out_dir=out/resolveome/signatures/sigprofiler/
 mkdir -p $out_dir
 
@@ -83,5 +83,5 @@ Rscript bin/msigHDP_reformat_input_matrix.R \
 # plot mutational signatures on tree
 Rscript bin/plot_tree.R \
   $out_dir/mutational_signatures/sigprofiler_branches/output/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Activities/COSMIC_SBS96_Activities.txt \
-  out/resolveome/sequoia/20250918 \
+  out/resolveome/sequoia \
   $out_dir/mutational_signatures/sigprofiler_branches/output/sequoia/

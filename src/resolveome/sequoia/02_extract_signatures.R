@@ -68,7 +68,7 @@ mutlist_to_96_contexts <- function(mutlist, genomeFile) {
 }
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 sig_subdir <- "lodato_2018"
 out_dir <- file.path("out/resolveome/signatures/", sig_subdir)
 artefact_file <- ""

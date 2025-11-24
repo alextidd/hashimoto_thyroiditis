@@ -121,7 +121,7 @@ muts$bj <-
   })
 
 # load mutations from sequoia exact / beta binomial filtering
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 muts$seq_binom <-
   c("NV", "NR") %>%
   purrr::set_names() %>%

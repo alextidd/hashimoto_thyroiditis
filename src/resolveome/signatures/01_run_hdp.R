@@ -17,7 +17,7 @@ gdsigs <- c("machado_2022_SBSblood", "SBS4", "SBS7a", "SBS7b", "SBS7c",
             "machado_2022_SignatureIg")
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 out_dir <- file.path("out/resolveome/signatures/hdp/blood,17,Ig/")
 dir.create(out_dir, showWarnings = FALSE)
 

@@ -1,10 +1,10 @@
 #!/bin/bash
-# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J 01_get_bams -o log/%J_01_get_bams.out -e log/%J_01_get_bams.err 'bash src/00_setup/01_get_bams.sh'
+# runsub src/00_setup/01_get_bams.sh
 
 # module
 module load IRODS/1.0
 
-# run (dna only for now)
+# run (dna / dnahyb)
 (
   cd $LUSTRE_125/projects/hashimoto_thyroiditis/data/bams/
   nextflow run $NFS_TEAM/nextflow/nf-get_bam \
@@ -16,5 +16,19 @@ module load IRODS/1.0
     -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/get_bams/ \
     -N at31@sanger.ac.uk \
     --cram_to_bam
-    # --merge_bams
+)
+
+# run (rna)
+(
+  cd $LUSTRE_125/projects/hashimoto_thyroiditis/data/bams/
+  nextflow run $NFS_TEAM/nextflow/nf-get_bam \
+    --samplesheet samplesheet_irods_rna.csv \
+    --fasta $REF_PATH/Homo_sapiens/GRCh37d5/genome.fa \
+    --location irods \
+    --out_dir ./ \
+    -resume \
+    -w $LUSTRE_125/projects/hashimoto_thyroiditis/work/get_bams/ \
+    -N at31@sanger.ac.uk \
+    --cram_to_bam \
+    --merge_bams
 )

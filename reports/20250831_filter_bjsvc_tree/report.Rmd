@@ -134,7 +134,7 @@ plot_phylo_muts <- function(tree, tips_ls, dot_size = 1, font_size = 0.7) {
 theme_set(theme_classic())
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 ```
 
 We load the tree and relabel it.

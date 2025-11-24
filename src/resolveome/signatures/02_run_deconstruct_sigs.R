@@ -5,7 +5,7 @@ library(dplyr)
 library(ape)
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 out_dir <- file.path("out/resolveome/signatures/deconstruct_sigs")
 dir.create(out_dir, showWarnings = FALSE)
 

@@ -3,7 +3,7 @@ msa_attributions_file <- commandArgs(trailingOnly=TRUE)[1]
 seq_dir <- commandArgs(trailingOnly=TRUE)[2]
 out_dir <- commandArgs(trailingOnly=TRUE)[3]
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-# msa_attributions_file <- "out/resolveome/signatures/sigprofiler/mutational_signatures/sigprofiler_branches/output/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Activities/COSMIC_SBS96_Activities.txt"; seq_dir <- "out/resolveome/sequoia/20250918" ; out_dir <- "out/resolveome/signatures/sigprofiler/mutational_signatures/sigprofiler_branches/output/sequoia/"
+# msa_attributions_file <- "out/resolveome/signatures/sigprofiler/mutational_signatures/sigprofiler_branches/output/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Activities/COSMIC_SBS96_Activities.txt"; seq_dir <- "out/resolveome/sequoia" ; out_dir <- "out/resolveome/signatures/sigprofiler/mutational_signatures/sigprofiler_branches/output/sequoia/"
 
 # libraries
 library(ape)

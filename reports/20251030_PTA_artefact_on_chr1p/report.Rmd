@@ -68,7 +68,7 @@ breakpoints <-
 par_x <- c(60001:2699520, 154931044:155260560)
 
 # get mutations from the tree on chr1p / non-PAR x
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 muts <-
   c("NV", "NR") %>%
   purrr::set_names() %>%
@@ -213,20 +213,28 @@ We plot the trinucleotide spectra of these true and artefactual variants.
 
 ```{r plot-trinucs, fig.width = 10, fig.height = 5}
 # get artefactual trinucs
-artefact_trinucs <-
-  classed_muts %>%
-  dplyr::filter(class == "artefact", nchar(ref) == 1, nchar(alt) == 1) %>%
-  as.data.frame() %>%
-  deconstructSigs::mut.to.sigs.input(
-    sample.id = "id", bsg = BSgenome.Hsapiens.UCSC.hg38)
-
-# get true trinucs
-true_trinucs <-
-  classed_muts %>%
-  dplyr::filter(class == "true", nchar(ref) == 1, nchar(alt) == 1) %>%
-  as.data.frame() %>%
-  deconstructSigs::mut.to.sigs.input(
-    sample.id = "id", bsg = BSgenome.Hsapiens.UCSC.hg38)
+trinucs <-
+  c("true", "artefact") %>%
+  purrr::set_names() %>%
+  purrr::map(function(class_i) {
+    classed_muts %>%
+      dplyr::filter(class == class_i, nchar(ref) == 1, nchar(alt) == 1) %>%
+      split(.$chr) %>%
+      purrr::map(function(dat_i) {
+        dat_i %>%
+          as.data.frame() %>%
+          deconstructSigs::mut.to.sigs.input(
+            sample.id = "id", bsg = BSgenome.Hsapiens.UCSC.hg38) %>%
+          tibble::rownames_to_column(var = "id") %>%
+          tidyr::pivot_longer(cols = -id, names_to = "sub",
+                              values_to = "count") %>%
+          dplyr::mutate(trinuc_sub = substr(sub, 3, 5),
+                        trinuc = paste0(substr(sub, 1, 1), substr(sub, 3, 3),
+                                        substr(sub, 7, 7)))
+      }) %>%
+      dplyr::bind_rows(.id = "chr")
+  }) %>%
+  dplyr::bind_rows(.id = "class")
 
 # function: plot trinucs
 plot_trinucs <-
@@ -235,9 +243,6 @@ plot_trinucs <-
       c("C>A" = "dodgerblue", "C>G" = "black", "C>T" = "red",
         "T>A" = "grey70", "T>C" = "olivedrab3", "T>G" = "plum2")
     p_dat %>%
-      tibble::enframe(name = "sub", value = "count") %>%
-      dplyr::mutate(trinuc_sub = substr(sub, 3, 5),
-                    trinuc = paste0(substr(sub, 1, 1), substr(sub, 3, 3), substr(sub, 7, 7))) %>%
       ggplot(aes(x = trinuc, y = count, fill = trinuc_sub)) +
       geom_col() +
       facet_grid(~ trinuc_sub, scales = "free_x", space = "free_x") +
@@ -249,10 +254,21 @@ plot_trinucs <-
   }
 
 # plot trinucs
-plot_trinucs(colSums(artefact_trinucs)) +
+trinucs %>%
+  dplyr::filter(class == "artefact") %>%
+  plot_trinucs() +
   ggtitle("Artefactual variants (VAF < 0.75)")
-plot_trinucs(colSums(true_trinucs)) +
+trinucs %>%
+  dplyr::filter(class == "true") %>%
+  plot_trinucs() +
   ggtitle("True variants (VAF >= 0.9)")
+
+# plot trinucs by chromosome
+trinucs %>%
+  dplyr::filter(class == "artefact") %>%
+  split(.$chr) %>%
+  purrr::map(~ plot_trinucs(.x) +
+               ggtitle(paste("Artefactual variants (VAF < 0.75):", unique(.x$chr))))
 ```
 
 I also want to look at the spectrum of variants at very low VAF, as these are
@@ -266,10 +282,16 @@ artefact_trinucs_lo <-
                 alt_vaf < 0.25) %>%
   as.data.frame() %>%
   deconstructSigs::mut.to.sigs.input(
-    sample.id = "id", bsg = BSgenome.Hsapiens.UCSC.hg38)
+    sample.id = "id", bsg = BSgenome.Hsapiens.UCSC.hg38) %>%
+  tibble::rownames_to_column(var = "id") %>%
+        tidyr::pivot_longer(cols = -id, names_to = "sub",
+                            values_to = "count") %>%
+        dplyr::mutate(trinuc_sub = substr(sub, 3, 5),
+                      trinuc = paste0(substr(sub, 1, 1), substr(sub, 3, 3),
+                                      substr(sub, 7, 7)))
 
 # plot trinucs
-plot_trinucs(colSums(artefact_trinucs_lo)) +
+plot_trinucs(artefact_trinucs_lo) +
   ggtitle("Artefactual variants (VAF < 0.25)")
 ```
 

@@ -8,7 +8,7 @@ library(ape)
 library(RColorBrewer)
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 hdp_dir <- "out/resolveome/signatures/hdp/blood,17"
 out_dir <- "out/resolveome/signatures/sigfit/blood,17"
 dir.create(out_dir, showWarnings = FALSE)

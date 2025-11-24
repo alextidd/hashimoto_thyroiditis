@@ -40,7 +40,7 @@ source("bin/utils.R")
 theme_set(theme_classic())
 
 # dirs
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 hdp_dir <- "out/resolveome/signatures/hdp/blood/"
 
 # set signatures of interest

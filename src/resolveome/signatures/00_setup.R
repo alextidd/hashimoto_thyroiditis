@@ -61,6 +61,9 @@ lodato <-
   dplyr::arrange(Type)
 ref <- cbind(ref, lodato_2018_ScB = lodato$B)
 
+# add universal PTA artefact signature from luquette 2022
+
+
 # save ref
 ref %>%
   write.table(

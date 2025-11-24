@@ -13,7 +13,7 @@ library(tibble)
 bj_dir <-
   file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis",
             "out/resolveome/basejumper/bj-somatic-variantcalling/dna/PD63118/")
-seq_dir <- "out/resolveome/sequoia/20250918/"
+seq_dir <- "out/resolveome/sequoia/"
 dir.create(seq_dir, recursive = TRUE, showWarnings = FALSE)
 
 # get ids in tables

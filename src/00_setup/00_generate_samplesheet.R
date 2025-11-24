@@ -140,12 +140,18 @@ ss_irods <-
     donor_id = donor_id_required_for_ega,
     sanger_sample_id, supplier_sample_name, manifest_file,
     bam) %>%
-  # filter out rna and low quality cells
-  dplyr::filter(seq_type != "rna", cell_id %in% clean_cell_ids)
+  # filter out low quality cells
+  dplyr::filter(cell_id %in% clean_cell_ids)
 
-# write ss irods
+# write ss irods (dna/dnahyb)
 ss_irods %>%
-  readr::write_csv(paste0(data_dir, "/samplesheet_irods.csv"))
+  dplyr::filter(seq_type != "rna") %>%
+  readr::write_csv(file.path(data_dir, "samplesheet_irods.csv"))
+
+# write ss irods (rna)
+ss_irods %>%
+  dplyr::filter(seq_type == "rna") %>%
+  readr::write_csv(file.path(data_dir, "samplesheet_irods_rna.csv"))
 
 # ss local (with merged RNA BAMs collapsed)
 ss_local <-
