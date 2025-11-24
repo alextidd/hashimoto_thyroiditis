@@ -1,9 +1,14 @@
 #!/bin/bash
 # runsub src/resolveome/scan2/00_test.sh
 
-# conda env
-module load tabix/1.18
+
+# modules
 module load ISG/conda
+
+# clear system contamination
+unset PYTHONPATH
+
+# load conda env
 conda activate scan2
 
 # dirs
@@ -34,6 +39,9 @@ fi
     --ref $wd/data/scan2/GRCh37/genome.fa \
     --dbsnp $NFS_TEAM/reference/dbsnp/GRCh37/common_all_20180423.vcf \
     --shapeit-refpanel $NFS_TEAM/reference/shapeit/GRCh37/ \
+    --bulk-bam $bulk_dir/PD63118b_lo0001.sample.dupmarked.bam \
+    --regions-file $wd/out/resolveome/scan2/windows/windows.bed \
+    --abmodel-n-cores 10 \
     --bulk-bam $bulk_dir/PD63118b_lo0001.sample.dupmarked.bam \
     --sc-bam $bam_dir/PD63118/plate3_wellA2_dna_run49882/bam/plate3_wellA2_dna_run49882.bam \
     --sc-bam $bam_dir/PD63118/plate3_wellA3_dna_run49882/bam/plate3_wellA3_dna_run49882.bam
