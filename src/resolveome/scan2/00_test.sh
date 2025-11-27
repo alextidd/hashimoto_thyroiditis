@@ -1,14 +1,8 @@
 #!/bin/bash
 # runsub src/resolveome/scan2/00_test.sh
 
-
-# modules
+# conda env
 module load ISG/conda
-
-# clear system contamination
-unset PYTHONPATH
-
-# load conda env
 conda activate scan2
 
 # dirs
