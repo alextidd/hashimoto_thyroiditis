@@ -1,0 +1,168 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(biomaRt)
+library(patchwork)
+
+# set ggplot presets
+theme_set(theme_classic())
+```
+
+# Parameters
+
+```{r params, echo = FALSE}
+params
+```
+
+# Load mutations
+
+```{r load-mutations}
+# load mutations
+seq_dir <- "out/resolveome/sequoia/"
+muts <-
+  c("NV", "NR") %>%
+  purrr::set_names() %>%
+  purrr::map(function(i) {
+    paste0(seq_dir, "Patient_both_", i, "_tree_all.txt") %>%
+      read.table() %>%
+      tibble::as_tibble(rownames = "mut_id") %>%
+      tidyr::separate_wider_delim(cols = mut_id, delim = "_",
+                                  names = c("chr", "pos", "ref", "alt")) %>%
+      tidyr::pivot_longer(cols = -c(chr, pos, ref, alt), names_to = "id")
+  }) %>%
+  dplyr::bind_rows(.id = "name") %>%
+  tidyr::pivot_wider() %>%
+  dplyr::rename(alt_depth = NV, total_depth = NR) %>%
+  dplyr::mutate(pos = as.numeric(pos)) %>%
+  # filter on depth
+  dplyr::filter(alt_depth > 0, total_depth >= 5) %>%
+  dplyr::mutate(alt_vaf = alt_depth / total_depth) %>%
+  # split by id
+  split(.$id)
+```
+
+# Plot rainfalls
+
+```{r plot-rainfalls, fig.width = 20, fig.height = 7, results = "asis"}
+# convert mutations to pyrimidine-based
+to_pyrimidine <- c("C" = "C", "T" = "T", "A" = "T", "G" = "C")
+to_complement <- c("A" = "T", "C" = "G", "G" = "C", "T" = "A")
+muts_pal <-
+  c("C>A" = "dodgerblue", "C>G" = "black", "C>T" = "red", 
+    "T>A" = "grey70", "T>C" = "olivedrab3", "T>G" = "plum2",
+    "indel" = "orange")
+
+# annotate genes of interest
+mart37 <-
+  useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", GRCh = "37")
+genes_of_interest <- c("TNFRSF14", "CD274", "BCL6")
+genes_to_annotate <-
+  getBM(
+    attributes = c("hgnc_symbol", "chromosome_name", "start_position", "end_position"),
+    filters = "hgnc_symbol", values = genes_of_interest, mart = mart37) %>%
+  dplyr::transmute(
+    gene = hgnc_symbol,
+    chr = paste0("chr", chromosome_name),
+    start = start_position,
+    end = end_position
+  ) %>%
+  dplyr::bind_rows(
+    tibble::tribble(
+      ~gene, ~chr, ~start, ~end,
+      "IGH", "chr14", 105803171, 107268434,
+      "IGK", "chr2", 89156874, 90274235,
+      "IGL", "chr22", 22380474, 23265085)) %>%
+  # add levels
+  dplyr::mutate(chr = factor(chr, levels = paste0("chr", c(1:22, "X", "Y"))))
+
+# plot rainfall
+purrr::walk2(names(muts), muts, function(id_i, muts_i) {
+  p_dat <-
+    muts_i %>%
+    dplyr::group_by(chr) %>%
+    dplyr::arrange(chr, pos) %>%
+    # get intermutational distances
+    dplyr::mutate(
+      prev_pos = dplyr::lag(pos),
+      intermut_dist = pos - prev_pos) %>% 
+    dplyr::ungroup() %>%
+    dplyr::mutate(
+      chr = factor(chr, levels = paste0("chr", c(1:22, "X", "Y"))),
+      mut_type = dplyr::case_when(nchar(ref) == 1 & nchar(alt) == 1 ~ "snv",
+                                  TRUE ~ "indel"),
+      
+      ref_py = dplyr::case_when(mut_type == "snv" ~ to_pyrimidine[ref],
+                                TRUE ~ NA),
+      alt_py = dplyr::case_when(mut_type == "snv" & ref_py != ref ~ to_complement[alt],
+                                mut_type == "snv" ~ alt,
+                                TRUE ~ NA),
+      mutation = dplyr::case_when(mut_type == "indel" ~ "indel",
+                                  TRUE ~ paste0(ref_py, ">", alt_py)),
+      mutation = factor(mutation, levels = names(muts_pal)))
+  p1 <-
+    p_dat %>%
+    ggplot(aes(x = pos, y = log10(intermut_dist), colour = mutation)) +
+    geom_rect(data = genes_to_annotate,
+              aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf),
+              inherit.aes = FALSE, fill = "lightgrey", colour = "lightgrey",
+              size = 2) +
+    geom_point() +
+    facet_grid(cols = vars(chr), scales = "free_x", space = "free_x") +
+    theme_classic() +
+    theme(panel.spacing = unit(0, "lines"),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank()) +
+    scale_colour_manual(values = muts_pal) +
+    ggtitle(id_i) +
+    labs(x = "", y = "log10(intermutational distance)")
+  p2 <-
+    p_dat %>%
+    ggplot(aes(x = pos, y = 1)) +
+    geom_point(colour = NA) +
+    ggrepel::geom_text_repel(
+      data = genes_to_annotate,
+      aes(x = (start + end) / 2, y = 1, label = gene),
+      inherit.aes = FALSE, nudge_y = -0.5) +
+    facet_grid(cols = vars(chr), scales = "free_x", space = "free_x") +
+    theme_void() +
+    theme(strip.text = element_blank(),
+          panel.spacing = unit(0, "lines"))
+  p <- (p1 / p2) + plot_layout(heights = c(12, 1)) + theme(plot.margin = unit(c(0, 0, 0, 0), "pt"))
+  
+  cat("### ", id_i, "\n\n")
+  print(p)
+  cat("\n\n")
+})
+```
