@@ -20,12 +20,14 @@ cp \
   /nfs/cancer_ref01/nst_links/live/3464/PD63118b_lo0001/PD63118b_lo0001.sample.dupmarked.bam* \
   $bulk_dir/
 
-# make genome windows of 100kb (autosomes only, no chr prefix)
+# make genome windows of 100kb (no chr prefix, no PARs)
 mysql --user=genome --host=genome-mysql.cse.ucsc.edu -A -e \
   "select chrom, size from hg19.chromInfo" \
   > $windows_dir/hg19.genome
-bedtools makewindows -g $windows_dir/hg19.genome -w 100000 |
+cat $windows_dir/hg19.genome |
+awk '$1 ~ /^chr([1-9]|1[0-9]|2[0-2]|X|Y)$/' |
+bedtools makewindows -g - -w 100000 |
 sed 's/^chr//' |
 sort -V -k1,1 -k2,2n |
-awk '$1 ~ /^([1-9]|1[0-9]|2[0-2]|X|Y)$/' \
+bedtools subtract -a - -b data/scan2/GRCh37/PARs.bed \
 > $windows_dir/windows.bed
