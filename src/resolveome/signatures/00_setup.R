@@ -19,15 +19,12 @@ refs <-
       as.matrix()
   })
 
-# use v3.4 + Signature_17 from v2
+# use v3.4, replace 0 with small value and normalise
 ref <- refs$v3.4
-ref <- cbind(ref, SBS17 = refs$v2[, "Signature_17"])
-
-# replace 0 with small value and normalise
 ref[is.na(ref) | ref == 0] <- 0.00001
 ref <- t(t(ref) / colSums(ref))
 
-# add SBSblood from machado 2022
+# SBSblood from machado 2022
 machado <-
   readr::read_tsv("data/signatures/machado_2022/S8_finalsignaturetable.tsv") %>%
   tidyr::pivot_longer(cols = -c("Signature")) %>%
@@ -36,11 +33,10 @@ machado <-
                                      substr(name, 6, 6), "]",
                                      substr(name, 3, 3)),
                               levels = full_vec)) %>%
-  dplyr::arrange(Type) %>%
-  tidyr::pivot_wider(names_from = "Signature", values_from = "value")
-ref <- cbind(ref, machado_2022_SBSblood = machado$SBSblood, machado_2022_SignatureIg = machado$Signature.Ig)
+  tidyr::pivot_wider(names_from = "Signature", values_from = "value") %>%
+  tibble::column_to_rownames("Type")
 
-# add artefact signature ScF from petljak 2019
+# artefact signature ScF from petljak 2019
 petljak <-
   readr::read_tsv("data/signatures/petljak_2019/mmc1.tsv") %>%
   dplyr::mutate(
@@ -48,24 +44,39 @@ petljak <-
                          `Mutation Type`, "]",
                          substr(`Mutation Subtype`, 3, 3)),
                   levels = full_vec)) %>%
-  dplyr::arrange(Type)
-ref <- cbind(ref, petljak_2019_ScF = petljak$`SBS sc_F`)
+  tibble::column_to_rownames("Type")
 
-# add artefact signature ScB from lodato 2018
+# artefact signature ScB from lodato 2018 (MDA)
 lodato <-
   "data/signatures/lodato_2018/Lodato2018_SignatureData_Aging.csv" %>%
   readr::read_csv() %>%
   dplyr::mutate(
     Type = factor(paste0(substr(`...1`, 1, 1), "[", `...2`, "]",
                          substr(`...1`, 3, 3)), levels = full_vec)) %>%
-  dplyr::arrange(Type)
-ref <- cbind(ref, lodato_2018_ScB = lodato$B)
+  tibble::column_to_rownames("Type")
 
-# add universal PTA artefact signature from luquette 2022
+# universal PTA artefact signature from luquette 2022
+load("data/signatures/luquette_2022/snv.artifact.signature.v3.rda")
+luquette <-
+  snv.artifact.signature.v3 %>%
+  tibble::enframe(value = "pta_artefact") %>%
+  dplyr::mutate(Type = paste0(substr(name, 1, 1), "[", substr(name, 5, 7), "]",
+                substr(name, 3, 3))) %>%
+  tibble::column_to_rownames("Type")
 
+# add all additional signatures to ref
+ref <-
+  cbind(
+    ref,
+    SBS17 = refs$v2[rownames(ref), "Signature_17"],
+    machado_2022_SBSblood = machado[rownames(ref), "SBSblood"],
+    machado_2022_SignatureIg = machado[rownames(ref), "Signature.Ig"],
+    lodato_2018_ScB = lodato[rownames(ref), "B"],
+    petljak_2019_ScF = petljak[rownames(ref), "SBS sc_F"],
+    luquette_2022_PTA_artefact = luquette[rownames(ref), "pta_artefact"])
 
 # save ref
 ref %>%
   write.table(
-    file = "out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv",
+    file = "out/resolveome/signatures/reference_signatures.tsv",
     sep = "\t", quote = FALSE)

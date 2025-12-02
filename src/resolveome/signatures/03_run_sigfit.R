@@ -1,4 +1,4 @@
-# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M50000 -R 'span[hosts=1] select[mem>50000] rusage[mem=50000]' -J resolveome_signatures_03_run_sigfit -o log/%J_resolveome_signatures_03_run_sigfit.out -e log/%J_resolveome_signatures_03_run_sigfit.err 'Rscript src/resolveome/signatures/03_run_sigfit.R'
+# runsub src/resolveome/signatures/03_run_sigfit.R -R -M 50000
 
 # libraries
 library(sigfit)
@@ -9,21 +9,24 @@ library(RColorBrewer)
 
 # dirs
 seq_dir <- "out/resolveome/sequoia/"
-hdp_dir <- "out/resolveome/signatures/hdp/blood,17"
-out_dir <- "out/resolveome/signatures/sigfit/blood,17"
+hdp_dir <- "out/resolveome/signatures/hdp/1,5,blood,luquette,8"
+out_dir <- "out/resolveome/signatures/sigfit/1,5,blood,luquette,7b,18"
 dir.create(out_dir, showWarnings = FALSE)
 
 # reload objects
 trinuc_mut_mat <-
   read.table(file.path(hdp_dir, "trinuc_mut_mat.txt"))
-ref <- read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv")
+ref <- read.table("out/resolveome/signatures/reference_signatures.tsv")
 tree <- ape::read.tree(file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
 tree_df <- as.data.frame(ggtree::fortify(tree))
 
 # define the final sigs
 final_sigs <-
-  c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB")
+  c("machado_2022_SBSblood",
+    "SBS1", "SBS5", "SBS9", "SBS17a", "SBS17b", "SBS18", "SBS7b",
+    "luquette_2022_PTA_artefact")
 final_ref <- t(as.matrix(ref[, final_sigs]))
+writeLines(final_sigs, file.path(out_dir, "final_signatures.txt"))
 
 # keep branches with >50 muts
 hdp_counts <- trinuc_mut_mat[rowSums(trinuc_mut_mat) > 50, ]
@@ -78,6 +81,9 @@ sf_exp <-
   t()
 sf_exp[is.na(sf_exp)] <- 0
 
+# save exposures matrix
+write.table(sf_exp, file.path(out_dir, "sigfit_exposures_per_branch.tsv"))
+
 # create tree plot with fitted signatures colored along branches
 pdf(file.path(out_dir, "tree_with_branch_length_sigfit.pdf"),
     height = 10, width = 10)
@@ -86,8 +92,18 @@ pdf(file.path(out_dir, "tree_with_branch_length_sigfit.pdf"),
 all_cols <- brewer.pal(n = nrow(sf_exp), "Set3")
 names(all_cols) <- rownames(sf_exp)
 
+# get tip colours by celltype
+cell_annots <-
+  tibble::tibble(cell_ID = as.numeric(tree$tip.label)) %>%
+  dplyr::left_join(
+    "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+      readr::read_tsv())
+tip_cols <- ifelse(cell_annots$celltype_VDJ_recomb == "B cell", "blue",
+            ifelse(cell_annots$celltype_VDJ_recomb == "alpha-beta T cell",
+                    "red", "grey"))
+
 # create tree
-plot(tree, cex = 0.7, label.offset = 0.01 * max(tree_df$x))
+plot(tree, cex = 0.7, label.offset = 0.01 * max(tree_df$x), tip.color = tip_cols)
 
 # for each sample, draw rectangles showing signature proportions
 for (sample in colnames(sf_exp)) {
@@ -112,5 +128,11 @@ for (sample in colnames(sf_exp)) {
 axisPhylo(side = 1, backward = FALSE)
 legend("topright", title = "signatures", legend = names(all_cols),
        fill = all_cols, bty = "n", cex = 0.8, ncol = 1, xjust = 0.5)
+legend("bottomright", title = "celltype",
+       legend = c("B cell", "alpha-beta T cell", "not lymphocyte"),
+       col    = c("blue", "red", "grey"),
+       pch    = 19,
+       pt.cex = 1,
+       bty    = "n")
 
 dev.off()

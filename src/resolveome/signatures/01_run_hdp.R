@@ -1,24 +1,14 @@
-# cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q basement -M50000 -R 'span[hosts=1] select[mem>50000] rusage[mem=50000]' -J resolveome_signatures_01_run_hdp -o log/%J_resolveome_signatures_01_run_hdp.out -e log/%J_resolveome_signatures_01_run_hdp.err 'Rscript src/resolveome/signatures/01_run_hdp.R'
+# runsub src/resolveome/signatures/01_run_hdp.R -R -M 50000
 
-# parameters
+# palette
 mut_colours_96 <- rep(c("dodgerblue", "black", "red", "grey70",
                         "olivedrab3", "plum2"), each = 16)
 mut_colours <- c("dodgerblue", "black", "red", "grey70",
                  "olivedrab3", "plum2")
 
-sigs_to_exclude <-
-  c("petljak_2019_ScF", "SBS1", "SBS5", "SBS19", "SBS17a", "SBS17b")
-
-# define reference signatures of interest (normal somatic + artefacts)
-gdsigs <- c("machado_2022_SBSblood", "SBS4", "SBS7a", "SBS7b", "SBS7c",
-            "SBS2", "SBS13", "SBS16", "SBS18", "SBS92",
-            "SBS9", "SBS17", "SBS34", "SBS41",
-            "SBS40a", "SBS40c", "SBS88", "lodato_2018_ScB",
-            "machado_2022_SignatureIg")
-
 # dirs
 seq_dir <- "out/resolveome/sequoia/"
-out_dir <- file.path("out/resolveome/signatures/hdp/blood,17,Ig/")
+out_dir <- file.path("out/resolveome/signatures/hdp/1,5,blood,luquette,8/")
 dir.create(out_dir, showWarnings = FALSE)
 
 # libraries
@@ -185,8 +175,6 @@ dev.off()
 # extract and save signature matrices
 #------------------------------------------------------------------
 
-freq <- table(key_table$Group)
-
 # extract signature-sample assignment matrix
 # this shows which signatures are active in which samples
 dp_distn <- comp_dp_distn(hdp_multi_chains)
@@ -201,6 +189,7 @@ write.table(exposures, file.path(out_dir, "mean_assignment_hdp.txt"))
 hdp_sigs <- as.data.frame(t(comp_categ_distn(hdp_multi_chains)$mean))
 colnames(hdp_sigs) <- paste0("N", colnames(hdp_sigs))
 write.table(hdp_sigs, file.path(out_dir, "hdp_sigs.txt"))
+# hdp_sigs <- read.table(file.path(out_dir, "hdp_sigs.txt"))
 
 #------------------------------------------------------------------
 # signature comparison and deconvolution
@@ -208,9 +197,29 @@ write.table(hdp_sigs, file.path(out_dir, "hdp_sigs.txt"))
 # compare extracted signatures to known cosmic signatures using
 # cosine similarity and deconvolve them into known signature components
 
-# load cosmic reference signatures + wga artefacts
-ref <- read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv")
-ref <- ref[, !(colnames(ref) %in% sigs_to_exclude)]
+# define reference signatures of interest
+# (normal somatic + artefact + from studies)
+pta_artefact_sig <-
+  "luquette_2022_PTA_artefact"
+normal_somatic_sigs <-
+  c("SBS1", "SBS5",             # endogenous clock-like
+    "SBS4", "SBS92",            # tobacco
+    "SBS7a", "SBS7b", "SBS7c",  # UV
+    "SBS2", "SBS13",            # APOBEC
+    "SBS88",                    # colibactin
+    "SBS18",                    # oxidative
+    "SBS9",                     # SHM
+    "SBS8",                     # found in mem B cells in Machado et al. (2022)
+    "SBS16", "SBS17a", "SBS17b", "SBS34", "SBS41", "SBS40a", "SBS40c") # unknown
+study_sigs <-
+  c("machado_2022_SignatureIg", "machado_2022_SBSblood")
+sigs_of_interest <-
+  c(pta_artefact_sig, normal_somatic_sigs, study_sigs)
+writeLines(sigs_of_interest,
+           file.path(out_dir, "sigs_of_interest.txt"))
+
+# load reference signatures
+ref <- read.table("out/resolveome/signatures/reference_signatures.tsv")
 
 # calculate cosine similarity between hdp and reference signatures
 # cosine similarity ranges 0-1, with 1 = perfect match
@@ -240,10 +249,7 @@ dev.off()
 # decompose complex hdp signatures into linear combinations of
 # known reference signatures using expectation-maximization
 
-# version identifier for output files
-add <- "v1"
-
-signatures <- t(ref[, gdsigs])
+signatures <- t(ref[, sigs_of_interest])
 sample_list <- paste0("N", c(0:(ncol(hdp_sigs) - 1)))
 colnames(hdp_sigs) <- paste0("N", c(0:(ncol(hdp_sigs) - 1)))
 profiles <- hdp_sigs[, sample_list]
@@ -308,10 +314,11 @@ colnames(signature_fraction_r2) <- sigs_to_deconv
 
 # repeat the deconvolution with the identified constitutive signatures
 n <- 1
+cosine_reconst_ls <- list()
 for (s in sigs_to_deconv) {
   # use only signatures identified in round 1 for this sample
-  gdsigs <- sigs_deconv_r2[[s]]
-  signatures <- t(ref[, gdsigs])
+  sigs_of_interest_i <- sigs_deconv_r2[[s]]
+  signatures <- t(ref[, sigs_of_interest_i])
 
   signature_fraction <- matrix(NA, nrow = nrow(signatures),
                                ncol = length(sample_list))
@@ -337,19 +344,20 @@ for (s in sigs_to_deconv) {
   }
 
   # saving the signature contributions for the sample
-  signature_fraction_r2[gdsigs, n] <- alpha
+  signature_fraction_r2[sigs_of_interest_i, n] <- alpha
   n <- n + 1
 
   # reconstruct signature and calculate fit quality
   reconsbs <- rep(0, 96)
-  for (g in gdsigs) {
+  for (g in sigs_of_interest_i) {
     reconsbs <- reconsbs + (ref[, g] * alpha[g])
   }
   cosine_reconst <- cosine(x = reconsbs, y = hdp_sigs[, s])
   print(paste0(s, ": ", cosine_reconst))
+  cosine_reconst_ls[[s]] <- cosine_reconst[1, 1]
 
   # plot deconvolution results
-  pdf(file.path(out_dir, paste0("HDP_", s, "_reconstitution_", add, ".pdf")),
+  pdf(file.path(out_dir, paste0("HDP_", s, "_reconstitution.pdf")),
       height = 10)
   par(mfrow = c(length(alpha) + 2, 1))
   par(mar = c(1, 2, 4, 1))
@@ -364,7 +372,7 @@ for (s in sigs_to_deconv) {
                         round(cosine_reconst, digits = 2)))
 
   # individual reference signature contributions
-  for (g in gdsigs) {
+  for (g in sigs_of_interest_i) {
     add_plot <- ""
     if (grepl("SBS", g)) add_plot <- "pcawg "
     barplot(ref[, g], col = mut_colours_96,
@@ -373,6 +381,17 @@ for (s in sigs_to_deconv) {
   }
   dev.off()
 }
+
+# save signature fractions
+signature_fraction_r2 %>%
+  t() %>%
+  tibble::as_tibble(rownames = "component") %>%
+  tidyr::pivot_longer(cols = -c("component"),
+                      names_to = "signature", values_to = "contribution") %>%
+  dplyr::filter(!is.na(contribution)) %>%
+  dplyr::mutate(cosine_reconstruction = purrr::map_dbl(component, ~ cosine_reconst_ls[[.x]])) %>%
+  dplyr::arrange(component, -contribution) %>%
+  readr::write_tsv(file.path(out_dir, "hdp_em_signature_deconvolution.tsv"))
 
 #------------------------------------------------------------------
 # phylogenetic visualization

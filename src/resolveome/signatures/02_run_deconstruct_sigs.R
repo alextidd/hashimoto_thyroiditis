@@ -14,7 +14,7 @@ library(BSgenome.Hsapiens.UCSC.hg38)
 genome <- BSgenome.Hsapiens.UCSC.hg38
 
 # load ref
-ref <- read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv")
+ref <- read.table("out/resolveome/signatures/reference_signatures.tsv")
 
 # transform ref
 sigs_ref <- as.data.frame(t(ref))
@@ -110,15 +110,25 @@ deconstruct_sigs <- function(sigs_of_interest, cols = NULL) {
 
 }
 
+
+
 pdf(file.path(out_dir, "tree_with_branch_length_deconstruct_sigs.pdf"), height = 10, width = 10)
-deconstruct_sigs(c("machado_2022_SBSblood", "petljak_2019_ScF"))
-deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB"))
-deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "petljak_2019_ScF"))
-deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
-deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
-deconstruct_sigs(c("SBS1", "SBS5", "SBS19", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
-deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB"))
-deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17", "machado_2022_SignatureIg", "lodato_2018_ScB"))
+# em algorithm-extracted signatures
+deconstruct_sigs(
+  c("machado_2022_SBSblood", "SBS1", "SBS5", "SBS9", "SBS17a", "SBS17b",
+    "SBS7b", "SBS40a", "SBS18", "SBS4",
+    "luquette_2022_PTA_artefact"))
+deconstruct_sigs(
+  c("machado_2022_SBSblood", "SBS1", "SBS5", "SBS9", "SBS17a", "SBS17b",
+    "luquette_2022_PTA_artefact"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "petljak_2019_ScF"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "lodato_2018_ScB"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "petljak_2019_ScF"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
+# deconstruct_sigs(c("SBS1", "SBS5", "SBS19", "SBS9", "SBS17a", "SBS17b", "lodato_2018_ScB"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB"))
+# deconstruct_sigs(c("machado_2022_SBSblood", "SBS9", "SBS17", "machado_2022_SignatureIg", "lodato_2018_ScB"))
 dev.off()
 
 pdf(file.path(out_dir, "tree_with_branch_length_deconstruct_sigs.pdf"), height = 10, width = 10)
