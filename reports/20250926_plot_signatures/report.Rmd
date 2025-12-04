@@ -34,23 +34,75 @@ library(dplyr)
 library(ggplot2)
 library(ape)
 library(BSgenome.Hsapiens.UCSC.hg38)
+library(patchwork)
 source("bin/utils.R")
+
+# get genome object
+genome <- BSgenome.Hsapiens.UCSC.hg38
 
 # set ggplot presets
 theme_set(theme_classic())
 
 # dirs
 seq_dir <- "out/resolveome/sequoia/"
-hdp_dir <- "out/resolveome/signatures/hdp/blood/"
+hdp_dir <- "out/resolveome/signatures/hdp/1,5,blood,luquette/"
+sigfit_dir <- "out/resolveome/signatures/sigfit/1,5,blood,luquette/"
 
-# set signatures of interest
-sigs_of_interest <-
-  c("machado_2022_SBSblood", "SBS9", "SBS17", "lodato_2018_ScB", "machado_2022_SignatureIg")
+# function: plot burden by signature vs mutant status
+plot_burden_by_status <- function(p_dat_i, x, colour, title_suffix) {
+  comp <- unique(p_dat_i[, x, drop = TRUE])
+  if (length(comp) == 2) {
+    comp <- list(comp)
+  } else {
+    comp <- combn(comp, 2, simplify = FALSE)
+  }
+  p <-
+    p_dat_i %>%
+    ggplot(aes(x = .data[[x]], y = value)) +
+    geom_boxplot() +
+    scale_x_discrete(guide = guide_axis(angle = -45)) +
+    labs(title = unique(p_dat_i$name),
+         subtitle = paste0("burden by ", x, "\n", title_suffix)) +
+    ggpubr::stat_compare_means(comparison = comp)
+  if (!is.null(colour)) {
+    p <- p + ggbeeswarm::geom_beeswarm(aes(colour = .data[[colour]]), size = 0.7)
+  } else {
+    p <- p + ggbeeswarm::geom_beeswarm(size = 0.7)
+  }
+  if (length(comp) > 2) {
+    p <- p + ggpubr::stat_compare_means(label.y = max(p_dat_i$value) * 1.4)
+  }
+  p
+}
+
+# function: plot spectrum per group
+plot_spectrum_per_group <- function(muts_i, i) {
+  p_dat <-
+    trinuc_mut_mat[paste0("Patient_", muts_i$Branch), ] %>%
+    colSums() %>%
+    tibble::enframe(name = "trinuc", value = "n_muts") %>%
+    mutate(trinuc = gsub("\\.", "", trinuc),
+           x = paste0(substr(trinuc, 3, 3), substr(trinuc, 1, 1), substr(trinuc, 4, 4)),
+           facet = paste0(substr(trinuc, 1, 1), ">", substr(trinuc, 2, 2)))
+  p <-
+    p_dat %>%
+    ggplot(aes(x = x, y = n_muts, fill = facet)) +
+    geom_col() +
+    facet_grid(~ facet, scales = "free_x") +
+    scale_fill_manual(values = trinuc_cols) +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme_classic() +
+    theme(legend.position = "none",
+          axis.text.x = element_text(family = "Courier", angle = -90, hjust = 1, vjust = 0.5),
+          axis.title.x = element_blank()) +
+    ggtitle(paste0(i, " (", sum(p_dat$n_muts), " mutations)"))
+  return(p)
+}
 ```
 
-# Run deconstructSigs
+# Load data
 
-```{r deconstructsigs}
+```{r load_data}
 # get cell annotations
 cell_annots <-
   "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
@@ -68,9 +120,13 @@ cell_annots <-
                                         "Unclear - 9p del + intronic",
                                         "FALSE_Het", "WT", "-")))
 
+# load signatures of interest
+sigs_of_interest <-
+  readLines(file.path(sigfit_dir, "final_signatures.txt"))
+
 # load ref
 ref <-
-  read.table("out/resolveome/signatures/cosmic_v3.4_ScF_ScB_SBSblood.tsv") %>%
+  read.table("out/resolveome/signatures/reference_signatures.tsv") %>%
   t() %>%
   as.data.frame()
 
@@ -85,32 +141,9 @@ muts_per_branch <-
   file.path(seq_dir, "Patient_both_assigned_to_branches.txt") %>%
   read.table(header = TRUE)
 
-# generate sigs input from branches
-genome <- BSgenome.Hsapiens.UCSC.hg38
-sigs_input <-
-  muts_per_branch %>%
-  janitor::clean_names() %>%
-  deconstructSigs::mut.to.sigs.input(bsg = genome, sample.id = "sample_id")
-
-# run deconstructSigs
-test <-
-  rownames(sigs_input) %>%
-  purrr::set_names() %>%
-  purrr::map(function(i) {
-    print(i)
-    deconstructSigs::whichSignatures(
-      tumor.ref = sigs_input,
-      signatures.ref = ref[sigs_of_interest, ],
-      sample.id = i,
-      contexts.needed = TRUE)
-  })
-
-# get the exposures
-sigs_exposures <-
-  test %>%
-  purrr::map(~ .x$weights %>% mutate(unknown = .x$unknown)) %>%
-  bind_rows() %>%
-  t()
+# load sigfit exposures per branch
+sf_exp <-
+  read.table(file.path(sigfit_dir, "sigfit_exposures_per_branch.tsv"))
 
 # map edges and tips
 edge_lengths <-
@@ -123,7 +156,7 @@ branch_to_tip_label <-
 
 # get burden per branch
 sigs_exp_df <-
-  sigs_exposures %>%
+  sf_exp %>%
   tibble::as_tibble(rownames = "signature") %>%
   tidyr::pivot_longer(-signature, names_to = "branch",
                       values_to = "exposure") %>%
@@ -179,7 +212,7 @@ dat %>%
   ggplot(aes(x = cell_ID, y = value, fill = signature)) +
   geom_bar(stat = "identity") +
   theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
-  labs(y = "Proportion of mutations",
+  labs(y = "",
        x = "Cell ID",
        fill = "Signature") +
   facet_grid(name ~ celltype, scales = "free", space = "free_x") +
@@ -265,7 +298,7 @@ dat %>%
 
 # Plot burden per signature vs mutant status
 
-```{r burdens_per_sig, fig.height = 10}
+```{r burdens_per_sig}
 # prep data
 p_dat <-
   dat %>%
@@ -285,33 +318,6 @@ p_dat <-
     status = paste("TNFRSF14", `TNFRSF14 status`, "\nCD274", `CD274 status`)
   ) %>%
   split(.$name)
-
-# function: plot burden by signature vs mutant status
-plot_burden_by_status <- function(p_dat_i, x, colour, title_suffix) {
-  comp <- unique(p_dat_i[, x, drop = TRUE])
-  if (length(comp) == 2) {
-    comp <- list(comp)
-  } else {
-    comp <- combn(comp, 2, simplify = FALSE)
-  }
-  p <-
-    p_dat_i %>%
-    ggplot(aes(x = .data[[x]], y = value)) +
-    geom_boxplot() +
-    scale_x_discrete(guide = guide_axis(angle = -45)) +
-    labs(title = unique(p_dat_i$name),
-         subtitle = paste0("burden by ", x, "\n", title_suffix)) +
-    ggpubr::stat_compare_means(comparison = comp)
-  if (!is.null(colour)) {
-    p <- p + ggbeeswarm::geom_beeswarm(aes(colour = .data[[colour]]), size = 0.7)
-  } else {
-    p <- p + ggbeeswarm::geom_beeswarm(size = 0.7)
-  }
-  if (length(comp) > 2) {
-    p <- p + ggpubr::stat_compare_means(label.y = max(p_dat_i$value) * 1.4)
-  }
-  p
-}
 
 # plot burden by signature vs tnfrsf14 status
 p_dat %>%
@@ -343,38 +349,41 @@ muts_per_path <-
   distinct(cell_ID, child_node, parent_node, edge, n_muts) %>%
   mutate(Branch = child_node) %>%
   left_join(cell_annots)
-
-# function: plot spectrum per group
-plot_spectrum_per_group <- function(muts_i, i) {
-  p <-
-    trinuc_mut_mat[paste0("Patient_", muts_i$Branch), ] %>%
-    colSums() %>%
-    tibble::enframe(name = "trinuc", value = "n_muts") %>%
-    mutate(trinuc = gsub("\\.", "", trinuc),
-           x = paste0(substr(trinuc, 3, 3), substr(trinuc, 1, 1), substr(trinuc, 4, 4)),
-           facet = paste0(substr(trinuc, 1, 1), ">", substr(trinuc, 2, 2))) %>%
-    ggplot(aes(x = x, y = n_muts, fill = facet)) +
-    geom_col() +
-    facet_grid(~ facet, scales = "free_x") +
-    scale_fill_manual(values = trinuc_cols) +
-    scale_y_continuous(expand = c(0, 0)) +
-    theme_classic() +
-    theme(legend.position = "none",
-          axis.text.x = element_text(family = "Courier", angle = -90, hjust = 1, vjust = 0.5),
-          axis.title.x = element_blank()) +
-    ggtitle(i)
-  return(p)
-}
 ```
 
 # Spectrum per celltype
 
 ```{r spectrum_per_celltype, fig.width = 20}
 muts_per_ct <- muts_per_path %>% split(.$celltype)
-purrr::walk2(names(muts_per_ct), muts_per_ct, function(ct, muts_per_ct_i) {
-  p <-
-    plot_spectrum_per_group(muts_per_ct_i, ct)
+purrr::walk2(names(muts_per_ct), muts_per_ct, function(ct_i, muts_per_ct_i) {
+  pdf("test.pdf", width = 20)
+  p1 <-
+    dat %>%
+    group_by(celltype, signature) %>%
+    summarise(n_muts_exp = sum(n_muts_exp), n_muts = sum(n_muts)) %>%
+    dplyr::filter(celltype == ct_i, n_muts_exp > 0) %>%
+    ungroup() %>%
+    mutate(n_muts = sum(n_muts_exp)) %>%
+    arrange(n_muts_exp) %>%
+    mutate(
+      prop_muts_exp = n_muts_exp / n_muts,
+      signature = signature %>% gsub("luquette_2022_", "", .) %>% gsub("machado_2022_", "", .),
+      signature = case_when(prop_muts_exp < 0.02 ~ NA, TRUE ~ signature),
+      signature = forcats::fct_inorder(signature)) %>%
+    ggplot(aes(x = celltype, y = n_muts_exp)) +
+    geom_col(aes(fill = signature)) +
+    geom_label(aes(label = signature, colour = signature),
+               fill = "black", position = position_stack(vjust = 0.5)) +
+    scale_fill_brewer(palette = "Set3") +
+    scale_colour_brewer(palette = "Set3") +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme_void() +
+    theme(axis.text.y = element_text(), legend.position = "none")
+  p2 <-
+    plot_spectrum_per_group(muts_per_ct_i, ct_i)
+  p <- (p1 | p2) + plot_layout(widths = c(1, 10))
   print(p)
+  dev.off()
 })
 ```
 
@@ -382,9 +391,27 @@ purrr::walk2(names(muts_per_ct), muts_per_ct, function(ct, muts_per_ct_i) {
 
 ```{r spectrum_per_cell, fig.width = 20}
 muts_per_cell <- muts_per_path %>% split(.$cell_ID)
-purrr::walk2(names(muts_per_cell), muts_per_cell, function(cell_ID, muts_per_cell_i) {
-  p <-
-    plot_spectrum_per_group(muts_per_cell_i, cell_ID)
+purrr::walk2(names(muts_per_cell), muts_per_cell, function(cell_ID_i, muts_per_cell_i) {
+  p1 <-
+    dat %>%
+    dplyr::filter(cell_ID == cell_ID_i, n_muts_exp > 0) %>%
+    arrange(n_muts_exp) %>%
+    mutate(
+      prop_muts_exp = n_muts_exp / n_muts,
+      signature = signature %>% gsub("luquette_2022_", "", .) %>% gsub("machado_2022_", "", .),
+      signature = forcats::fct_inorder(signature)) %>%
+    ggplot(aes(x = cell_ID, y = n_muts_exp)) +
+    geom_col(aes(fill = signature)) +
+    geom_label(aes(label = signature, colour = signature),
+               fill = "black", position = position_stack(vjust = 0.5)) +
+    scale_fill_brewer(palette = "Set3") +
+    scale_colour_brewer(palette = "Set3") +
+    scale_y_continuous(expand = c(0, 0)) +
+    theme_void() +
+    theme(axis.text.y = element_text(), legend.position = "none")
+  p2 <-
+    plot_spectrum_per_group(muts_per_cell_i, cell_ID_i)
+  p <- (p1 | p2) + plot_layout(widths = c(1, 10))
   print(p)
 })
 ```
@@ -411,25 +438,27 @@ shared_trinucs <-
   split(.$celltype)
 
 purrr::walk2(names(shared_trinucs), shared_trinucs, function(i, trinucs_i) {
-  p <-
-    trinucs_i %>%
-    as.data.frame() %>%
-    deconstructSigs::mut.to.sigs.input(bsg = genome, sample.id = "sample_id") %>%
-    colSums() %>%
-    tibble::enframe(name = "trinuc", value = "n_muts") %>%
-    mutate(x = paste0(substr(trinuc, 1, 1), substr(trinuc, 3, 3), substr(trinuc, 7, 7)),
-            facet = substr(trinuc, 3, 5)) %>%
-    ggplot(aes(x = x, y = n_muts, fill = facet)) +
-    geom_col() +
-    facet_grid(~ facet, scales = "free_x") +
-    scale_fill_manual(values = trinuc_cols) +
-    scale_y_continuous(expand = c(0, 0)) +
-    theme_classic() +
-    theme(legend.position = "none",
-          axis.text.x = element_text(family = "Courier", angle = -90, hjust = 1, vjust = 0.5),
-          axis.title.x = element_blank()) +
-    ggtitle(i)
-  print(p)
+  if (nrow(trinucs_i) > 0) {
+    p <-
+      trinucs_i %>%
+      as.data.frame() %>%
+      deconstructSigs::mut.to.sigs.input(bsg = genome, sample.id = "sample_id") %>%
+      colSums() %>%
+      tibble::enframe(name = "trinuc", value = "n_muts") %>%
+      mutate(x = paste0(substr(trinuc, 1, 1), substr(trinuc, 3, 3), substr(trinuc, 7, 7)),
+              facet = substr(trinuc, 3, 5)) %>%
+      ggplot(aes(x = x, y = n_muts, fill = facet)) +
+      geom_col() +
+      facet_grid(~ facet, scales = "free_x") +
+      scale_fill_manual(values = trinuc_cols) +
+      scale_y_continuous(expand = c(0, 0)) +
+      theme_classic() +
+      theme(legend.position = "none",
+            axis.text.x = element_text(family = "Courier", angle = -90, hjust = 1, vjust = 0.5),
+            axis.title.x = element_blank()) +
+      ggtitle(i)
+    print(p)
+  }
 })
 ```
 

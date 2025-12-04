@@ -30,14 +30,14 @@ knitr::opts_chunk$set(warning = FALSE,
 To extract mutational signatures, we need to decompose the trees into their
 branches. We then perform mutational signature extraction on these branches.
 
-## Step 1: Attain vcfs for each branch
+## Step 1: Attain VCFs for each branch
 
-Within the scripts directory of sequoia_phylogeny, place the following script: get_branch_vcf.py 
-also construct a txt file with PDIDs
+Within the scripts directory of sequoia_phylogeny, place the following script: `get_branch_vcf.py`.
+Also construct a txt file with PDIDs.
 
-Then run the following script...
+Then run the following script:
 
-```{bash construct_vcfs}
+```{bash construct_vcfs, eval = FALSE}
 # modules
 module load python-3.11.6/perl-5.38.0 openjdk-11.0.20.1_1
 module load sigprofiler/extractor-1.1.24-GRCh38-GRCh37
@@ -64,32 +64,35 @@ mv branch_vcfs/PD*/vcf_with_header/* branch_vcfs/vcf_with_header/
 rm -rf branch_vcfs/PD*
 ```
 
-## step 2 : run matrix generator as standard
-```{bash run matrix generator}
+## Step 2: Run matrix generator
+
+```{bash run_matrix_generator, eval = FALSE}
 module load python-3.11.6/perl-5.38.0 openjdk-11.0.20.1_1
 module load sigprofiler/extractor-1.1.24-GRCh38-GRCh37
 module load sigprofiler/matrixGenerator-1.2.30
 SigProfilerMatrixGenerator matrix_generator colibactin_trees GRCh38 branch_vcfs/matrix_generator/
 
-## move the output to the directory : 'annotate trees' :
+# move the output to the directory : 'annotate trees' :
 mkdir annotate_trees
 mv branch_vcfs/matrix_generator/output/ annotate_trees/
 
-## then copy the output in annotate trees to signatures directory
+# then copy the output in annotate trees to signatures directory
 cd ../../
 mkdir mutational_signatures/sigprofiler_20Sept_Branches
 mkdir mutational_signatures/sigprofiler_20Sept_Branches/01_Input
 mkdir mutational_signatures/sigprofiler_20Sept_Branches/02_Output
 cp -r sequoia_phylogeny/snv_phylogeny/annotate_trees/output/ mutational_signatures/sigprofiler_20Sept_Branches/01_Input/
 
-## copy the output alo to msig hdp directory :
+# copy the output alo to msig hdp directory :
 mkdir mutational_signatures/msigHDP_20Sept_Branches
 mkdir mutational_signatures/msigHDP_20Sept_Branches/01_input/
 mkdir mutational_signatures/msigHDP_20Sept_Branches/02_output/
 cp mutational_signatures/sigprofiler_20Sept_Branches/01_Input/output/SBS/colibactin_trees.SBS96.all  mutational_signatures/msigHDP_20Sept_Branches/01_input/
 ```
 
-```{bash construct mutational spectra plots }
+### Construct mutational spectra plots
+
+```{bash construct_mutational_spectra_plots, eval = FALSE}
 mkdir sigprofiler_18Aug_Branches/03_Sample_Spectra/
 python3
 matrix_path="01_Input/output/SBS/colibactin_trees.SBS96.all"
@@ -100,8 +103,11 @@ import sigProfilerPlotting as sigPlt
 sigPlt.plotSBS(matrix_path, output_path, project, plot_type, percentage=False)
 ```
 
-## step 3.1 : extract mutational signatures using sigprofiler :
-```{bash}
+## Step 3: Extract mutational signatures
+
+### Option A: SigProfiler Extractor
+
+```{bash sigprofiler_extract, eval = FALSE}
 module load python-3.11.6/perl-5.38.0 openjdk-11.0.20.1_1
 module load sigprofiler/extractor-1.1.24-GRCh38-GRCh37
 module load sigprofiler/matrixGenerator-1.2.30
@@ -111,7 +117,7 @@ input=${basedir}/01_Input/output/SBS/paediatric_branches_nodepth.SBS96.all  # in
 output=${basedir}/02_Output_96/ #output directory
 genome=GRCh38 # stipulate genome GRCh37 or GRCh38
 
-## submit as a job :
+# submit as a job
 bsub -n 8 -M 70000 -R"select[mem>70000] rusage[mem=70000]" -q normal -G team294-vwork \
 -o logs/${project_id}.%J.o -e logs/${project_id}.%J.e \
 00_scripts/run_Sigprofiler_Extractor.py \
@@ -121,7 +127,9 @@ bsub -n 8 -M 70000 -R"select[mem>70000] rusage[mem=70000]" -q normal -G team294-
 --reference_genome ${genome}
 ```
 
-```{bash sigprofiler extractor script}
+#### SigProfiler extractor script
+
+```{bash sigprofiler_extractor_script, eval = FALSE}
 #!/usr/bin/env python
 import sys, argparse
 from SigProfilerMatrixGenerator.scripts import SigProfilerMatrixGeneratorFunc as matGen
@@ -163,25 +171,31 @@ def main():
 
 if __name__ == "__main__":
   main()
-
 ```
 
-## step 3 : extract mutational signatures using msigHDP :
-```{bash load mutational signatures libraries}
-## load r and r_libs :
+### Option B: msigHDP
+
+#### Load libraries
+
+```{bash load_msighdp_libraries, eval = FALSE}
+# load r and r_libs :
 module load r-4.2.2 
 export R_LIBS_USER="/lustre/scratch125/casm/teams/team267/users/mp29/libraries/4.2/"
 export R_LIBS="/lustre/scratch125/casm/teams/team267/users/mp29/libraries/4.2/"
 ```
 
-```{bash copy across files and script}
-## copy across files and script
+#### Copy files and script
+
+```{bash copy_files, eval = FALSE}
+# copy across files and script
 cp  00_scripts/msigHDP_master.R msigHDP_20Sept_Branches/ # copy script into the directory where running
 cp ${basedir}/01_Input/output/SBS/colibactin_trees.SBS96.all  msigHDP_20Sept_Branches/01_input/ # copy matrix
 ```
 
-```{r reformat input matrix}
-# to reformat the indels matrix, run the following:
+#### Reformat input matrix
+
+```{r reformat_input_matrix, eval = FALSE}
+# reformat the indels matrix
 library(stringr)
 library(dplyr)
 file='/Users/hm14/volumes/hm14_lustre/team267/users/hm14/paediatric_colon_project/mutational_signatures/msigHDP_patients/01_input/paediatric_sbs_patients.SBS96.all'
@@ -190,8 +204,8 @@ msig<-read.table(file, sep='\t', header=T)
 colnames(msig)<-str_remove(colnames(msig), '_pon_mq30_lcmbb_vafdepmtr_filtered') # edit this line as required
 msig <- msig %>% mutate(MutationType = paste0(substr(MutationType, 1, 1), substr(MutationType, 3, 3), substr(MutationType, 7, 7), substr(MutationType, 5, 5))) # change the structure of the trinucleotide counts 
 
-## reformat for hierachy of 1) patient and 2) heatlthy /ibd state :
-#change context to rownames
+# reformat for hierachy of 1) patient and 2) heatlthy / ibd state
+# change context to rownames
 rownames(msig) <- NULL
 msig <- tibble::column_to_rownames(msig, "MutationType")
 
@@ -199,50 +213,37 @@ msig <- tibble::column_to_rownames(msig, "MutationType")
 exclude<-c('PD67979c_lo0006')
 msig<-msig%>%dplyr::select(!contains('PD67979c_lo0006'))
 
-### for nanoseq :
-#sample_key<-data.frame(samples=colnames(msig))
-#sample_key$patient=str_extract(sample_key$samples, 'PD\\d{5}')
-#sample_key$site_status=case_when(str_detect(sample_key$samples, '001')~'crypt',
-#                                str_detect(sample_key$samples, '002')~'stroma',
-#                                .default='both')
-
-## construct a vector for hierarchy :
-#samples <- colnames(msig)
-#sample_cut_vector <- as.vector(sample_key$site_status)
-#sample_key_vector_colnames <- paste0(sample_cut_vector,"::",samples)
-#colnames(msig) = sample_key_vector_colnames
-
-## readjust the msig dataframe and save the output
-#msig<-tibble::rownames_to_column(msig,'MutationType')
-
-
-##here i will create a sample key based on colnames because only 6 cases
+# here i will create a sample key based on colnames because only 6 cases
 sample_key<-data.frame(samples=colnames(msig))
 sample_key$patient=str_extract(sample_key$samples, 'PD\\d{5}')
 sample_key$ibd_status=ifelse(str_detect(sample_key$samples, 'PD67|PD68'), 'ibd','normal')
 
-## construct a vector for hierarchy :
+# construct a vector for hierarchy
 samples <- colnames(msig)
 sample_patient_vector <- as.vector(sample_key$patient)
 sample_status_vector <- as.vector(sample_key$ibd_status)
 sample_key_vector_colnames <- paste0(sample_status_vector,"::",samples)
 colnames(msig) = sample_key_vector_colnames
 
-## readjust the msig dataframe and save the output
+# readjust the msig dataframe and save the output
 msig<-tibble::rownames_to_column(msig,'MutationType')
 
-## write the table :
+# write the table
 write.table(msig, '/Users/hm14/volumes/hm14_lustre/team267/users/hm14/paediatric_colon_project/mutational_signatures/msigHDP_patients//01_input/msigHDP_input.txt',sep='\t',quote=FALSE,row.names=FALSE)
 ```
 
-```{bash run msigHDP}
+#### Run msigHDP
+
+```{bash run_msighdp, eval = FALSE}
 module load r-4.2.2 
 export R_LIBS_USER="/lustre/scratch125/casm/teams/team267/users/mp29/libraries/4.2/"
 export R_LIBS="/lustre/scratch125/casm/teams/team267/users/mp29/libraries/4.2/"
 bsub -o ./logs/%J.out -e ./logs/%J.err -G team294-vwork -q gpu-huge -gpu "num=2:gmem=16000" -n 16 -R 'select[mem>=50000] rusage[mem=50000]' -M50000 -env "all" Rscript ./msigHDP_master.R
 ```
 
-```{r reformat the output}
+#### Reformat the output
+
+```{r reformat_output, eval = FALSE}
 library(dplyr)
 library(stringr)
 
@@ -271,39 +272,40 @@ msig<-tibble::rownames_to_column(msig,'MutationType')
 suffix='_pon_mq30_lcmbb_vafdepmtr_filtered'
 colnames(msig)<-str_remove(colnames(msig), suffix)
 write.table(msig,'/Users/hm14/volumes/hm14_lustre/team267/users/hm14/paediatric_colon_project/mutational_signatures/msigHDP_branches_nodepth/01_input/sigpro_matrix.txt',sep='\t', quote=FALSE, row.names=FALSE)
-
 ```
 
-##step 3 : decompose mutational signatures :
-```{bash decompose mutational signatures}
-## load modules
+## Step 4: Decompose mutational signatures
+
+```{bash decompose, eval = FALSE}
+# load modules
 module load python-3.11.6/perl-5.38.0 openjdk-11.0.20.1_1
 module load sigprofiler/extractor-1.1.24-GRCh38-GRCh37
 module load sigprofiler/matrixGenerator-1.2.30
 
-## load directories 
+# load directories 
 sigpro_matrix='sigprofiler_indels/01_Input/output/ID/paediatric_indels.ID83.all'
 signatures='sigprofiler_indels/02_Output/ID83/All_Solutions/ID83_2_Signatures/Signatures/ID83_S2_Signatures.txt'
 output='sigprofiler_indels/02_Output/ID83/All_Solutions/ID83_2_Signatures/3_SigPro_Deconv/'
 genome='GRCh38'
-## run python script 
+
+# run python script 
 python 00_scripts/run_manual_decomp_fit.py --samples ${sigpro_matrix} --signatures ${signatures} --output ${output} --reference_genome ${genome}
 ```
 
-## step 3 : attribute mutational signatures :
-```{bash attribute signatures}
-## load modules
+## Step 5: Attribute mutational signatures
+
+```{bash attribute_signatures, eval = FALSE}
+# load modules
 module load python-3.11.6/perl-5.38.0 openjdk-11.0.20.1_1
 module load sigprofiler/extractor-1.1.24-GRCh38-GRCh37
 module load sigprofiler/matrixGenerator-1.2.30
 
 python3
 
-## then run in python
+# then run in python
 from SigProfilerAssignment import Analyzer as Analyze
 signatures="msigHDP_20Sept_Branches/02_Outputs/SigPro_Deconv/Decompose_Solution/Signatures/Decompose_Solution_Signatures.txt"
 samples="msigHDP_20Sept_Branches/01_input/colibactin_trees.SBS96.all"
 output="msigHDP_20Sept_Branches/02_Outputs/SigPro_Attribution/"
 Analyze.cosmic_fit(samples, output, signature_database=signatures, genome_build="GRCh38", verbose=False, collapse_to_SBS96 = False)
-
 ```

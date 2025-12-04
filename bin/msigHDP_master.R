@@ -1,18 +1,22 @@
 #!/usr/bin/env Rscript
 
+# libraries
 library(mSigHdp)
 library(ICAMS)
 library(cosmicsig)
 
-#note: the input file require the trinucleotides as format ACTA, meaning A[C>A]T 
+# args
+input_file <- commandArgs(trailingOnly = T)[1]
+out_dir <- commandArgs(trailingOnly = T)[2]
 
-input_data <- read.table("./01_input/msigHDP_input.txt", header=T,check.names =F, sep="\t",quote = "", row.names=1)
+#note: the input file require the trinucleotides as format ACTA, meaning A[C>A]T 
+input_data <- read.table(input_file, header = T, check.names = F, sep = "\t", quote = "", row.names = 1)
 
 input_data <- ICAMS::as.catalog(input_data, catalog.type = "counts")
 
 results <- mSigHdp::RunHdpxParallel(
   input.catalog        = round(input_data),
-  out.dir              = "./02_output",
+  out.dir              = out_dir,
   num.child.process    = 20, 
   CPU.cores            = 20,
   seedNumber           = 42,
@@ -29,4 +33,4 @@ results <- mSigHdp::RunHdpxParallel(
   checkpoint           = TRUE,
   verbose              = TRUE) 
 
-save(results, file = "./02_output/multi.chains.Rdata")
+save(results, file = file.path(out_dir, "multi.chains.Rdata"))

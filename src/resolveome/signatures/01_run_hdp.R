@@ -120,23 +120,23 @@ saveRDS(hdp_chains, file.path(out_dir, "hdp_chains.rds"))
 # combine multiple chains and extract consensus signatures
 
 # create multi-chain object for convergence diagnostics
-hdp_multi_chains <- hdp_multi_chain(hdp_chains)
+hdp_multi_chains_1 <- hdp_multi_chain(hdp_chains)
 
 # generate quality control plots to assess chain convergence
 pdf(file.path(out_dir, "QC_plots.pdf"))
 par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
 # likelihood traces (should stabilize after burnin)
-p1 <- lapply(chains(hdp_multi_chains), plot_lik, bty = "L", start = 1000)
+p1 <- lapply(chains(hdp_multi_chains_1), plot_lik, bty = "L", start = 1000)
 # number of active clusters over time
-p2 <- lapply(chains(hdp_multi_chains), plot_numcluster, bty = "L")
+p2 <- lapply(chains(hdp_multi_chains_1), plot_numcluster, bty = "L")
 # proportion of data assigned to clusters
-p3 <- lapply(chains(hdp_multi_chains), plot_data_assigned, bty = "L")
+p3 <- lapply(chains(hdp_multi_chains_1), plot_data_assigned, bty = "L")
 dev.off()
 
 # extract consensus signature profiles across chains
 # this averages signatures with high posterior support and
 # filters out those that appear in few chains (low confidence)
-hdp_multi_chains <- hdp_extract_components(hdp_multi_chains)
+hdp_multi_chains <- hdp_extract_components(hdp_multi_chains_1)
 
 #------------------------------------------------------------------
 # visualize extracted signatures
@@ -438,3 +438,27 @@ legend("topright", title = "signatures", legend = rownames(exposures),
        fill = all_cols, bty = "n", cex = 0.8, ncol = 1, xjust = 0.5)
 
 dev.off()
+
+
+# rerun with all signatures (from Luke)
+subset_ref <- t(ref[, setdiff(colnames(ref), c("lodato_2018_ScB", "petljak_2019_ScF", "SBS17"))])
+cosmic_fit <-
+  fit_signatures(1e4 * comp_categ_distn(hdp_multi_chains)$mean, subset_ref,
+                 iter = 3000, chains = 4, cores = 2, seed = 0xC0FFEE)
+apply(retrieve_pars(cosmic_fit, "exposures")$mean, 1, function(x) rownames(subset_ref)[x > 0.1])
+
+# rerun with expected signatures
+exp_signatures <- signatures[setdiff(rownames(signatures), "SBS5"), ]
+cosmic_fit <-
+  fit_signatures(1e4 * comp_categ_distn(hdp_multi_chains)$mean, exp_signatures,
+                 iter = 3000, chains = 4, cores = 2, seed = 0xC0FFEE)
+apply(retrieve_pars(cosmic_fit, "exposures")$mean, 1, function(x) rownames(exp_signatures)[x > 0.1])
+
+# rerun with sigs of interest
+cosmic_fit <-
+  fit_signatures(1e4 * comp_categ_distn(hdp_multi_chains)$mean, signatures,
+                 iter = 3000, chains = 4, cores = 2, seed = 0xC0FFEE)
+apply(retrieve_pars(cosmic_fit, "exposures")$mean, 1, function(x) rownames(signatures)[x > 0.1])
+
+retrieve_pars(cosmic_fit, "exposures")$mean %>%
+  

@@ -64,24 +64,21 @@ python3 -W ignore bin/run_Sigprofiler_Extractor.py \
   --project "hashimoto_thyroiditis" \
   --reference_genome "GRCh38"
 
-# copy the output to msighdp directory
-mkdir -p $out_dir/mutational_signatures/msighdp_branches/{input,output}
-cp \
-  $out_dir/mutational_signatures/sigprofiler_branches/input/SBS/hashimoto_thyroiditis.SBS96.all \
-  $out_dir/mutational_signatures/msighdp_branches/input/
+# decompose mutational signatures (only run if you don't like the suggested solution)
+mkdir -p $out_dir/mutational_signatures/sigprofiler_branches/output/SBS96/All_Solutions/SBS96_3_Signatures/decomposition/
+python3 \
+  bin/run_manual_decomp_fit.py \
+  --samples $out_dir/mutational_signatures/sigprofiler_branches/input/output/SBS/hashimoto_thyroiditis.SBS96.all \
+  --signatures $out_dir/mutational_signatures/sigprofiler_branches/output/SBS96/All_Solutions/SBS96_3_Signatures/Signatures/SBS96_S3_Signatures.txt \
+  --reference GRCh38 \
+  --output $out_dir/mutational_signatures/sigprofiler_branches/output/SBS96/All_Solutions/SBS96_3_Signatures/decomposition/
 
-# reformat matrix for msighdp
-Rscript bin/msigHDP_reformat_input_matrix.R \
-  $out_dir/mutational_signatures/msighdp_branches/input/hashimoto_thyroiditis.SBS96.all
+# decompose mutational signatures with custom reference
 
-# # decompose mutational signatures (only run if you don't like the suggested solution)
-# python3 \
-#   bin/run_manual_decomp_fit.py \
-#   --samples $out_dir/mutational_signatures/sigprofiler_branches/input/output/SBS/hashimoto_thyroiditis.SBS96.all \
-#   --signatures $out_dir/mutational_signatures/
 
 # plot mutational signatures on tree
 Rscript bin/plot_tree.R \
   $out_dir/mutational_signatures/sigprofiler_branches/output/SBS96/Suggested_Solution/COSMIC_SBS96_Decomposed_Solution/Activities/COSMIC_SBS96_Activities.txt \
   out/resolveome/sequoia \
   $out_dir/mutational_signatures/sigprofiler_branches/output/sequoia/
+
