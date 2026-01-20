@@ -1,5 +1,5 @@
 #!/bin/bash
-# runsub src/resolveome/scan2/01_run.sh -M 20000
+# runsub src/resolveome/scan2/01_run_no_normal.sh -M 20000
 
 # conda env
 module load ISG/conda

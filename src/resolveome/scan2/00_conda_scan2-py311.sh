@@ -13,6 +13,3 @@ conda install -c conda-forge r-base r-devtools r-reticulate r-data.table r-dplyr
 
 # add gatk3
 conda install -c conda-forge -c bioconda -c jluquette -c dranew -c soil gatk=3.8
-
-# # point reticulate to this python (export in your job/script)
-# export RETICULATE_PYTHON=$(which python)   # this will be the python in scan2-py311

@@ -7,14 +7,25 @@ library(magrittr)
 data_dir <- file.path(Sys.getenv("LUSTRE_125"), "projects/hashimoto_thyroiditis/data/bams/")
 dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 
-# hard-code the run_id-to-plate conversion
+# run_id-to-plate conversion
 # "49686" = 1
 # "49882" = 3, "49900" = 3, "49901" = 3, "50072" = 3
 # "50227" = 10, "50382" = 10
 # "50367" = 11
+# "51611" = 384.3
+
+# read in sequencescape pool files
+seqscape <-
+  list.files("data/resolveome/sequencescape/", pattern = "tsv$",
+             full.names = TRUE) %>%
+  {purrr::set_names(., basename(.) %>% tools::file_path_sans_ext())} %>%
+  purrr::map(readr::read_tsv) %>%
+  dplyr::bind_rows(.id = "id") %>%
+  janitor::clean_names() %>%
+  tidyr::separate_wider_delim("id", delim = "_", names = c("run_id", "lane"))
 
 # read in manifests
-manifests <-
+manifests_og <-
   "data/resolveome/manifest/" %>%
   list.files(pattern = ".xlsx$", full.names = TRUE) %>%
   {setNames(., basename(.) %>% tools::file_path_sans_ext())} %>%
@@ -24,36 +35,67 @@ manifests <-
       janitor::clean_names()
   })
 
+# fix manifests
+# - supplier_sample_name standardisation - {donor_id}_P{plate_number}_{seq_type}_{well}
+# - filter out unwanted samples
+manifests <- manifests_og
+
 # run49686_lane3 (7761stdy_manifest_25650_031024)
 # filter samples and fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_25650_031024"]] <-
-  manifests[["7761stdy_manifest_25650_031024"]] %>%
+  manifests_og[["7761stdy_manifest_25650_031024"]] %>%
   dplyr::filter(grepl("^Hashimoto", supplier_sample_name)) %>%
   dplyr::mutate(
-    supplier_sample_name = paste0("PD63118_P1_HYB_",
-                                  gsub(".* - ", "", supplier_sample_name)))
+    donor_id = "PD63118",
+    plate = 1,
+    seq_type = "dnahyb",
+    well = gsub(".* - ", "", supplier_sample_name))
+
+# extract metadata for the standardised manifests
+manifests <-
+  manifests_og[c("7761stdy_manifest_26617_Hyb_manifest_run50227_lane7_corrected",
+                 "7761stdy_manifest_26618_RNA_manifest_run50227_lane8_corrected",
+                 "7761stdy_manifest_26891_150425_R_D",
+                 "7761stdy_manifest_26916_230425_R_D")] %>%
+  purrr::map(function(m) {
+    m %>%
+    tidyr::separate_wider_delim(
+      supplier_sample_name, delim = "_",
+      names = c("donor_id", "plate", "seq_type", "well")) %>%
+    dplyr::mutate(
+      plate = as.numeric(gsub("P", "", plate)),            
+      seq_type = ifelse(seq_type == "HYB", "DNAHYB", seq_type) %>% tolower())
+  })
 
 # run49686_lane4-5 (7761stdy_manifest_25654_041024)
 # fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_25654_041024"]] <-
-  manifests[["7761stdy_manifest_25654_041024"]] %>%
+  manifests_og[["7761stdy_manifest_25654_041024"]] %>%
   dplyr::mutate(
-    supplier_sample_name = paste0("PD63118_P1_", gsub(" - ", "_",
-                                                      supplier_sample_name)))
+    donor_id = "PD63118",
+    plate = 1,
+    seq_type = "dna",
+    well = gsub(".* - ", "", supplier_sample_name))
 
 # run49882_lane1-8 (7761stdy_manifest_26013_211124_DNA)
 # fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_26013_211124_DNA"]] <-
-  manifests[["7761stdy_manifest_26013_211124_DNA"]] %>%
-  dplyr::mutate(supplier_sample_name = gsub("PD63118_", "PD63118_P3_",
-                                            supplier_sample_name))
+  manifests_og[["7761stdy_manifest_26013_211124_DNA"]] %>%
+  dplyr::mutate(
+    donor_id = "PD63118",
+    plate = 3,
+    seq_type = "dna",
+    well = gsub(".*_", "", supplier_sample_name))
 
 # run49900_lane2 (7761stdy_manifest_26014_211124_Hyb)
 # fix supplier sample names, adding plate number
 manifests[["7761stdy_manifest_26014_211124_Hyb"]] <-
-  manifests[["7761stdy_manifest_26014_211124_Hyb"]] %>%
-  dplyr::mutate(supplier_sample_name = gsub("PD63118_", "PD63118_P3_",
-                                            supplier_sample_name))
+  manifests_og[["7761stdy_manifest_26014_211124_Hyb"]] %>%
+  dplyr::mutate(
+    donor_id = "PD63118",
+    plate = 3,
+    seq_type = "dnahyb",
+    well = gsub(".*_", "", supplier_sample_name))
 
 # run49901_lane8 (7894stdy_manifest_26015_211124_RNA)
 # remove control (!= "1 cell") and low-yield (quant < 2) wells
@@ -77,31 +119,45 @@ pass_samples <-
   dplyr::mutate(supplier_sample_name = paste0("PD63118_RNA_", well)) %>%
   dplyr::pull(supplier_sample_name)
 manifests[["7894stdy_manifest_26015_211124_RNA"]] <-
-  manifests[["7894stdy_manifest_26015_211124_RNA"]] %>%
+  manifests_og[["7894stdy_manifest_26015_211124_RNA"]] %>%
   dplyr::mutate(
     supplier_sample_name = ifelse(sanger_sample_id == "7894STDY15290420",
                                   "PD63118_RNA_G10", supplier_sample_name)) %>%
   dplyr::filter(supplier_sample_name %in% pass_samples) %>%
-  dplyr::mutate(supplier_sample_name = gsub("PD63118_", "PD63118_P3_",
-                                            supplier_sample_name))
+  dplyr::mutate(
+    donor_id = "PD63118",
+    plate = 3,
+    seq_type = "rna",
+    well = gsub(".*_", "", supplier_sample_name))
 
-# combine standardised manifests
+# run51611_lane7-8 (7761stdy_manifest_28305_201125_AL28)
+manifests[["7761stdy_manifest_28305_201125_AL28"]] <-
+  manifests_og[["7761stdy_manifest_28305_201125_AL28"]] %>%
+  # remove controls
+  dplyr::filter(grepl("^PD", supplier_sample_name),
+                !grepl("10_nuclei", supplier_sample_name)) %>%
+  # fix supplier sample names, adding plate number
+  # (now using 384 kits - must add prefix to prevent plate number clash)
+  dplyr::mutate(
+    cell_id = supplier_sample_name,
+    donor_id = gsub("_.*", "", supplier_sample_name),
+    plate = 384.3,
+    seq_type = "dnahyb") %>%
+  dplyr::select(-well)
+
+# combine standardised manifests, select necessary columns only
+# from the manifests, we use the following metadata...
+# - supplier_sample_name - separated into pdid, plate, seq_type and well
+# - donor_id_required_for_ega - used as donor_id in samplesheet
 manifest <-
   manifests %>%
-  dplyr::bind_rows(.id = "manifest_file")
-
-# read in sequencescape pool files
-seqscape <-
-  list.files("data/resolveome/sequencescape/", pattern = "tsv$",
-             full.names = TRUE) %>%
-  {purrr::set_names(., basename(.) %>% tools::file_path_sans_ext())} %>%
-  purrr::map(readr::read_tsv) %>%
-  dplyr::bind_rows(.id = "id") %>%
-  janitor::clean_names() %>%
-  tidyr::separate_wider_delim("id", delim = "_", names = c("run_id", "lane"))
+  dplyr::bind_rows(.id = "manifest_file") %>%
+  dplyr::select(manifest_file, sanger_sample_id,
+                cell_id, donor_id, plate, seq_type, well)
 
 # get clean cells only (and cells that have not yet been assessed)
 # (plate 10 cells are being reassessed for doublet status with the dna)
+# PD63121 and PD63126 cells have not yet been assessed
 clean_cell_ids <-
   system("ls data/resolveome/manual_inspection/PD*.tsv", intern = TRUE) %>%
   purrr::map(readr::read_tsv) %>%
@@ -114,34 +170,28 @@ clean_cell_ids <-
 # generate cell_id - plate{plate}_well{well}
 # generate id      - plate{plate}_well{well}_{seq_type}_run{run_id}
 ss_irods <-
-  dplyr::inner_join(manifest, seqscape) %>%
-  tidyr::separate_wider_delim("supplier_sample_name", delim = "_",
-                              names = c("pdid", "plate", "seq_type", "well"),
-                              cols_remove = FALSE) %>%
+  dplyr::inner_join(manifest, seqscape, by = "sanger_sample_id") %>%
   dplyr::mutate(
-    # specify all HYB sequencing is from DNA
-    seq_type = ifelse(seq_type == "HYB", "DNAHYB", seq_type) %>% tolower(),
     lane_tmp = ifelse(lane == "lane1-8", "", lane),
     lane_n_tmp = ifelse(lane == "lane1-8", "", paste0("_", gsub("lane", "",
-                                                                lane))),
-    bam = paste0("/seq/illumina/runs/", substr(run_id, 1, 2), "/", run_id, "/",
-                 lane_tmp, "/plex", npg_aliquot_index, "/", run_id, lane_n_tmp,
-                 "#", npg_aliquot_index, ".cram"),
-    plate = as.numeric(gsub("^P", "", plate))) %>%
+                                                                lane)))) %>%
   dplyr::transmute(
-    cell_id = paste0("plate", plate, "_well", well),
+    cell_id = dplyr::case_when(!is.na(cell_id) ~ cell_id,
+                               TRUE ~ paste0("plate", plate, "_well", well)),
     # merge the two duplicate RNA runs
     id = dplyr::case_when(
       run_id %in% c(49901, 50072) & seq_type == "rna" ~
         paste0(cell_id, "_", seq_type, "_merged"),
       TRUE ~ paste0(cell_id, "_", seq_type, "_run", run_id)),
     plate, well, seq_type, run_id, lane, plex_n = npg_aliquot_index,
-    study_id = gsub("STDY.*", "", sanger_sample_id),
-    donor_id = donor_id_required_for_ega,
-    sanger_sample_id, supplier_sample_name, manifest_file,
-    bam) %>%
+    donor_id, manifest_file,
+    bam = paste0("/seq/illumina/runs/", substr(run_id, 1, 2), "/", run_id, "/",
+                 lane_tmp, "/plex", npg_aliquot_index, "/", run_id, lane_n_tmp,
+                 "#", npg_aliquot_index, ".cram")) %>%
   # filter out low quality cells
-  dplyr::filter(cell_id %in% clean_cell_ids)
+  dplyr::filter(
+    cell_id %in% clean_cell_ids |
+    plate == 384.3)
 
 # write ss irods (dna/dnahyb)
 ss_irods %>%
@@ -158,7 +208,7 @@ ss_local <-
   ss_irods %>%
   dplyr::mutate(bam = paste0(data_dir, "/", donor_id, "/", id, "/bam/", id,
                              ".bam")) %>%
-  dplyr::group_by(id) %>%
+  dplyr::group_by(id, donor_id) %>%
   dplyr::summarise(dplyr::across(everything(), ~ paste(unique(.),
                                                        collapse = "|")))
 

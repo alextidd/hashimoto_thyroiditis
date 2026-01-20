@@ -87,7 +87,8 @@ muts_pal <-
 # annotate genes of interest
 mart37 <-
   useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", GRCh = "37")
-genes_of_interest <- c("TNFRSF14", "CD274", "BCL6")
+genes_of_interest <-
+  c("TNFRSF14", "CD274", "BCL6", "LTB", "DUSP2", "KLHL6", "RFTN1", "ACTG1")
 genes_to_annotate <-
   getBM(
     attributes = c("hgnc_symbol", "chromosome_name", "start_position", "end_position"),
@@ -105,8 +106,10 @@ genes_to_annotate <-
       "IGK", "chr2", 89156874, 90274235,
       "IGL", "chr22", 22380474, 23265085)) %>%
   # add levels
-  dplyr::mutate(chr = factor(chr, levels = paste0("chr", c(1:22, "X", "Y"))))
+  dplyr::mutate(chr = factor(chr, levels = paste0("chr", c(1:22, "X", "Y")))) %>%
+  dplyr::filter(!is.na(chr))
 
+pdf("test.pdf", width = 20, height = 7)
 # plot rainfall
 purrr::walk2(names(muts), muts, function(id_i, muts_i) {
   p_dat <-
@@ -137,7 +140,7 @@ purrr::walk2(names(muts), muts, function(id_i, muts_i) {
     geom_rect(data = genes_to_annotate,
               aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf),
               inherit.aes = FALSE, fill = "lightgrey", colour = "lightgrey",
-              size = 2) +
+              size = 1) +
     geom_point() +
     facet_grid(cols = vars(chr), scales = "free_x", space = "free_x") +
     theme_classic() +
@@ -154,15 +157,17 @@ purrr::walk2(names(muts), muts, function(id_i, muts_i) {
     ggrepel::geom_text_repel(
       data = genes_to_annotate,
       aes(x = (start + end) / 2, y = 1, label = gene),
-      inherit.aes = FALSE, nudge_y = -0.5) +
+      inherit.aes = FALSE, 
+      angle = -90, direction = "x", nudge_y = -2, hjust = 0) +
     facet_grid(cols = vars(chr), scales = "free_x", space = "free_x") +
     theme_void() +
     theme(strip.text = element_blank(),
           panel.spacing = unit(0, "lines"))
-  p <- (p1 / p2) + plot_layout(heights = c(12, 1)) + theme(plot.margin = unit(c(0, 0, 0, 0), "pt"))
+  p <- (p1 / p2) + plot_layout(heights = c(5, 1)) + theme(plot.margin = unit(c(0, 0, 0, 0), "pt"))
   
   cat("### ", id_i, "\n\n")
   print(p)
   cat("\n\n")
 })
+dev.off()
 ```

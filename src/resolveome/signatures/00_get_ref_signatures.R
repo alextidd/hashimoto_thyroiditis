@@ -24,7 +24,7 @@ ref <- refs$v3.4
 ref[is.na(ref) | ref == 0] <- 0.00001
 ref <- t(t(ref) / colSums(ref))
 
-# SBSblood from machado 2022
+# SBSblood and SignatureIg from machado 2022
 machado <-
   readr::read_tsv("data/signatures/machado_2022/S8_finalsignaturetable.tsv") %>%
   tidyr::pivot_longer(cols = -c("Signature")) %>%

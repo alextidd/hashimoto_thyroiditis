@@ -26,9 +26,14 @@ common_snps <-
 # 0.3 < VAF < 0.7 and DP > 50
 # PD63118b_lo0044 has the highest coverage according to picard (68X)
 # PD66718b_lo0041 has the highest coverage according to picard (107X)
+# PD63121e_lo0001 for PD63121
+# PD63126c_lo0001 for PD63126
+
 caveman_snps <-
   c("PD66718" = "/lustre/scratch124/casm/references/nst_links/live/3438/PD66718b_lo0041/PD66718b_lo0041.caveman_c.snps.vcf.gz",
-    "PD63118" = "/nfs/irods-cgp-sr12-sdc/intproj/3464/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz") %>%
+    "PD63118" = "/nfs/irods-cgp-sr12-sdc/intproj/3464/sample/PD63118b_lo0044/PD63118b_lo0044.v1.caveman_c.snps.vcf.gz",
+    "PD63121" = "/nfs/irods-cgp-sb12-sde/intproj/3438/sample/PD63121d_lo0022/PD63121d_lo0022.v2.caveman_c.snps.vcf.gz",
+    "PD63126" = "/nfs/irods-cgp-sb10-sda/intproj/3438/sample/PD63126b_lo0010/PD63126b_lo0010.v2.caveman_c.snps.vcf.gz") %>%
   purrr::map(function(x) {
     x %>%
       readr::read_tsv(comment = "##") %>%
@@ -44,7 +49,6 @@ caveman_snps <-
       alexr::type_variants() %>%
       dplyr::distinct()
   })
-
 
 # get mutations
 nanoseq_muts <-
@@ -64,7 +68,7 @@ purrr::walk2(names(nanoseq_muts), nanoseq_muts, function(donor_id_i, muts_i) {
 
   # save complex mutations (will be discarded by nf-resolveome)
   muts_i %>%
-    alexr::type_mutations() %>%
+    alexr::type_variants() %>%
     dplyr::filter(type %in% c("dnv", "mnv")) %>%
     readr::write_tsv(file.path(out_dir, donor_id_i,
                                "nanoseq_mutations_complex.tsv"))
