@@ -126,7 +126,7 @@ sigs_of_interest <-
 
 # load ref
 ref <-
-  read.table("out/resolveome/signatures/reference_signatures.tsv") %>%
+  read.table("out/resolveome/signatures/ref_sigs/ref_sigs.tsv") %>%
   t() %>%
   as.data.frame()
 

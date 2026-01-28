@@ -33,6 +33,7 @@ knitr::opts_chunk$set(
 library(magrittr)
 library(dplyr)
 library(ape)
+library(ggplot2)
 
 # function: plot mutations on the tree
 plot_phylo_muts <- function(tree, tips_ls, dot_size = 1, font_size = 0.7) {

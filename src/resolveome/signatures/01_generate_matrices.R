@@ -21,12 +21,18 @@ seq_dir <- "out/resolveome/sequoia"
 out_dir <- "out/resolveome/signatures/matrices"
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
+# read cosmic refs for trinuc order
+trinuc_order <-
+  paste0("../../reference/cosmic/COSMIC_v3.4_SBS_GRCh38.txt") %>%
+  readr::read_tsv() %>%
+  dplyr::pull(Type)
+
 # read muts per branch
 muts_per_branch <-
   file.path(seq_dir, "Patient_both_assigned_to_branches.txt") %>%
   read.table(header = TRUE) %>%
-  janitor::clean_names() %>%
-  dplyr::rename()
+  tibble::as_tibble() %>%
+  janitor::clean_names()
 
 # get contexts
 trinuc_mut_mat <-
@@ -41,8 +47,16 @@ trinuc_mut_mat %>%
 # save sigprofiler format
 trinuc_mut_mat %>%
   t() %>%
-  tibble::as_tibble(rownames = "MutationType") %>%
-  dplyr::transmute(MutationType = hdp_to_sigpro(MutationType)) %>%
-  dplyr::arrange(MutationType) %>%
+  tibble::as_tibble(rownames = "Type") %>%
+  dplyr::mutate(Type = hdp_to_sigpro(Type) %>% factor(levels = trinuc_order)) %>%
+  dplyr::arrange(Type) %>%
   readr::write_tsv(file.path(out_dir, "trinuc_mut_mat_sigpro.txt"))
 
+# # get machado colonies
+# machado_md <-
+#   "/nfs/casm/team268im/at31/projects/hashimoto_thyroiditis/data/signatures/machado_2022/colonyinfo_AX001_KX001_KX002_KX003_TX001_TX002_CB001.txt" %>%
+#   readr::read_tsv() %>%
+#   janitor::clean_names()
+# machado_calls <-
+#   "data/signatures/machado_2022/mutcounts_matrix_pcawg_mm_lymph_hsc_sigprofilerOrder.txt" %>%
+#   readr::read_tsv()

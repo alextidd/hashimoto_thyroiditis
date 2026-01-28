@@ -8,8 +8,7 @@ module load singularity/3.11.4
 # run
 (
   cd $LUSTRE_125/projects/hashimoto_thyroiditis/data/fastqs/
-  head -1 samplesheet.csv > samplesheet.tmp.csv
-  grep "_dna_" samplesheet.csv >> samplesheet.tmp.csv
+  grep -v "PD63118" samplesheet.csv > samplesheet.tmp.csv
   nextflow run nf-core/bamtofastq \
     -profile singularity,sanger \
     --input samplesheet.tmp.csv \

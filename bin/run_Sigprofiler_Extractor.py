@@ -9,6 +9,8 @@ def main():
   parser.add_argument("--input_data", required=True, help="input nucleotide context")
   parser.add_argument("--project", required=True, help="project title")
   parser.add_argument("--reference_genome", required=True, help="reference genome")
+  parser.add_argument("--cosmic_version", required=False, default=3.4, type=float,
+                      help="COSMIC signature version to use for decomposition (default: 3.4)")
   args = parser.parse_args()
   print(args)
 
@@ -34,7 +36,8 @@ def main():
       max_nmf_iterations=1000000,
       nmf_test_conv=10000,
       nmf_tolerance=1e-15,
-      get_all_signature_matrices=False
+      get_all_signature_matrices=False,
+      cosmic_version=args.cosmic_version
   )
 
 if __name__ == "__main__":

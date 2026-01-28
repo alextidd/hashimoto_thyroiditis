@@ -27,6 +27,7 @@ work_dir=$lustre_dir/work/scan2/PD63118_develop_merged_normal/
 
 # set paths
 export TMPDIR=$work_dir
+export R_LIBS_USER=/software/conda/users/at31/scan2-py311/lib/R/library
 # export R_LIBS=/software/conda/users/at31/scan2/lib/R/library
 # export R_LIBS_USER=/software/conda/users/at31/scan2/lib/R/library
 export RETICULATE_PYTHON=/software/conda/users/at31/scan2/bin/python
@@ -64,6 +65,6 @@ fi
     call_mutations \
     --joblimit 800 \
     --abmodel-n-cores 10 \
-    --cluster "bsub -J {name} -q basement -M {resources.mem_mb} -R'select[mem>{resources.mem_mb}] rusage[mem={resources.mem_mb}]' -n {threads} -o %logdir/%J_{name}.out -e %logdir/%J_{name}.err -env 'all'" \
+    --cluster "bsub -J {name} -q basement -M {resources.mem_mb} -R 'select[mem>{resources.mem_mb}] rusage[mem={resources.mem_mb}]' -n {threads} -o %logdir/%J_{name}.out -e %logdir/%J_{name}.err -env 'all'" \
     --snakemake-args " --retries 2 --notemp --keep-going --latency-wait=60 --rerun-incomplete"
 )

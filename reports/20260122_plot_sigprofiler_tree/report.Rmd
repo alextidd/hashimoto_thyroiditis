@@ -1,0 +1,165 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center"
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(ape)
+
+# set ggplot presets
+theme_set(theme_classic())
+```
+
+# Load data
+
+```{r load_data}
+# dirs
+seq_dir <- "out/resolveome/sequoia/"
+
+# get cell annotations
+cell_annots <-
+  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  readr::read_tsv() %>%
+  mutate(
+    cell_ID = as.character(cell_ID),
+    celltype = case_when(celltype_SHM == "Mature B cell" ~ "Mature B cell",
+                         celltype_VDJ_recomb == "B cell" ~ "Non-mature B cell",
+                         TRUE ~ celltype_VDJ_recomb),
+    celltype = factor(celltype,
+                      levels = c("Mature B cell", "Non-mature B cell",
+                                 "alpha-beta T cell", "not lymphocyte")),
+    biallelic_CD274 = factor(biallelic_CD274,
+                             levels = c("TRUE_LOH", "TRUE_Compound",
+                                        "Unclear - 9p del + intronic",
+                                        "FALSE_Het", "WT", "-")))
+
+# load tree
+tree <-
+  read.tree(file.path(seq_dir, "Patient_both_tree_relabelled.tree"))
+tree_df <-
+  as.data.frame(ggtree::fortify(tree))
+
+# map edges and tips
+edge_lengths <-
+  tibble::tibble(parent_node = tree$edge[, 1],
+                 child_node = tree$edge[, 2],
+                 n_muts = tree$edge.length)
+branch_to_tip_label <-
+  tibble::tibble(cell_ID = tree$tip.label) %>%
+  mutate(child_node = row_number())
+
+# load muts per branch
+muts_per_branch <-
+  file.path(seq_dir, "Patient_both_assigned_to_branches.txt") %>%
+  read.table(header = TRUE)
+
+# load signature activities
+sig_exposures_1 <-
+  "out/resolveome/signatures/sigprofiler/assignment/consensus/Assignment_Solution/Activities/Assignment_Solution_Activities.txt" %>%
+  readr::read_tsv() 
+sigs_of_interest <-
+  sig_exposures_1 %>%
+  dplyr::select(-Samples) %>%
+  colnames()
+sig_exposures <-
+  sig_exposures_1 %>%
+  dplyr::rename(branch = Samples) %>%
+  tidyr::pivot_longer(cols = -c("branch"),
+                      names_to = "signature",
+                      values_to = "n_muts_sig") %>%
+  rowwise() %>%
+  mutate(child_node = as.numeric(gsub("Patient_", "", branch)),
+         edge = which(tree$edge[, 2] == child_node)) %>%
+  left_join(branch_to_tip_label) %>%
+  left_join(edge_lengths) %>%
+  group_by(branch) %>%
+  mutate(n_snvs = sum(n_muts_sig), indels = n_muts - n_snvs) %>%
+  ungroup() %>%
+  # add indels to the count
+  tidyr::pivot_wider(names_from = signature, values_from = n_muts_sig) %>%
+  tidyr::pivot_longer(cols = c(indels, dplyr::all_of(sigs_of_interest)),
+                      names_to = "signature",
+                      values_to = "n_muts_sig") %>%
+  mutate(signature = factor(signature,
+                            levels = c(sigs_of_interest, "indels")))
+
+# get all edges leading to each tip
+paths <-
+  branch_to_tip_label %>%
+  rowwise() %>%
+  mutate(
+    child_node = paste(nodepath(tree, from = Ntip(tree) + 1, to = child_node),
+                       collapse = ",")) %>%
+  tidyr::separate_longer_delim(cols = child_node, delim = ",") %>%
+  mutate(child_node = as.numeric(child_node)) %>%
+  # add sigs
+  inner_join(
+    sig_exposures %>%
+      dplyr::select(child_node, parent_node, edge, n_muts, n_muts_sig,
+                    signature, n_muts_sig))
+
+# prep plotting data
+dat <-
+  paths %>%
+  # get total muts per cell
+  dplyr::select(-n_muts) %>%
+  left_join(
+    paths %>%
+      dplyr::distinct(cell_ID, edge, n_muts) %>%
+      group_by(cell_ID) %>%
+      summarise(n_muts = sum(n_muts))) %>%
+  group_by(cell_ID, signature, n_muts) %>%
+  summarise(n_muts_sig = sum(n_muts_sig), .groups = "drop") %>%
+  left_join(cell_annots)
+```
+
+# Plot spectrum per celltype
+
+```{r plot_spectrum_per_celltype, fig.height=6, fig.width=8}
+dat %>%
+  ungroup() %>%
+  arrange(-n_muts) %>%
+  mutate(cell_ID = forcats::fct_inorder(cell_ID),
+         prop_muts_sig = n_muts_sig / n_muts) %>%
+  tidyr::pivot_longer(cols = c(n_muts_sig, prop_muts_sig)) %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+  labs(y = "",
+       x = "Cell ID",
+       fill = "Signature") +
+  facet_grid(name ~ celltype, scales = "free", space = "free_x") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_x_discrete(guide = guide_axis(angle = -90)) +
+  ggtitle("Cell type")
+```
