@@ -11,7 +11,6 @@ library(patchwork)
 # hdp params
 chains <- 20
 burnin <- 20000
-# chains <- 4; burnin <- 
 
 # dirs
 mat_dir <- "out/resolveome/signatures/matrices/"
@@ -33,7 +32,6 @@ trinuc_mut_mat <-
   trinuc_mut_mat[apply(trinuc_mut_mat, 1, sum) > 50, ]
 
 # get cell annots
-# get cell annotations
 cell_annots <-
   "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
   readr::read_tsv() %>%
@@ -215,16 +213,86 @@ hdp_sigs <- as.data.frame(t(comp_categ_distn(hdp_multi_chains)$mean))
 colnames(hdp_sigs) <- paste0("N", colnames(hdp_sigs))
 write.table(hdp_sigs, file.path(out_dir, "hdp_sigs.txt"))
 
-# load reference signatures
-ref <-
-  readr::read_tsv("out/resolveome/signatures/ref_sigs/ref_sigs.tsv") %>%
+# get ordering of substitutions
+sub_vec <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
+full_vec <- paste0(rep(c("A", "C", "G", "T"), each = 4), "[",
+                   rep(sub_vec, each = 16), "]",
+                   rep(c("A", "C", "G", "T"), times = 4))
+
+# load cosmic reference signatures
+refs <-
+  c("v2", "v3.4") %>%
+  purrr::set_names() %>%
+  purrr::map(function(v) {
+    readr::read_tsv(paste0("../../reference/cosmic/COSMIC_", v, "_SBS_GRCh38.txt")) %>%
+      dplyr::mutate(Type = factor(Type, levels = full_vec)) %>%
+      dplyr::arrange(Type) %>%
+      tibble::column_to_rownames("Type") %>%
+      as.matrix()
+  })
+
+# use v3.4, replace 0 with small value and normalise
+ref <- refs$v3.4
+ref[is.na(ref) | ref == 0] <- 0.00001
+ref <- t(t(ref) / colSums(ref))
+
+# SBSblood from machado 2022
+machado <-
+  readr::read_tsv("data/signatures/machado_2022/S8_finalsignaturetable.tsv") %>%
+  tidyr::pivot_longer(cols = -c("Signature")) %>%
+  dplyr::mutate(Type = factor(paste0(substr(name, 1, 1), "[",
+                                     substr(name, 2, 2), ">",
+                                     substr(name, 6, 6), "]",
+                                     substr(name, 3, 3)),
+                              levels = full_vec)) %>%
+  tidyr::pivot_wider(names_from = "Signature", values_from = "value") %>%
   tibble::column_to_rownames("Type")
+
+# artefact signature ScF from petljak 2019
+petljak <-
+  readr::read_tsv("data/signatures/petljak_2019/mmc1.tsv") %>%
+  dplyr::mutate(
+    Type = factor(paste0(substr(`Mutation Subtype`, 1, 1), "[",
+                         `Mutation Type`, "]",
+                         substr(`Mutation Subtype`, 3, 3)),
+                  levels = full_vec)) %>%
+  tibble::column_to_rownames("Type")
+
+# artefact signature ScB from lodato 2018 (MDA)
+lodato <-
+  "data/signatures/lodato_2018/Lodato2018_SignatureData_Aging.csv" %>%
+  readr::read_csv() %>%
+  dplyr::mutate(
+    Type = factor(paste0(substr(`...1`, 1, 1), "[", `...2`, "]",
+                         substr(`...1`, 3, 3)), levels = full_vec)) %>%
+  tibble::column_to_rownames("Type")
+
+# universal PTA artefact signature from luquette 2022
+load("data/signatures/luquette_2022/snv.artifact.signature.v3.rda")
+luquette <-
+  snv.artifact.signature.v3 %>%
+  tibble::enframe(value = "pta_artefact") %>%
+  dplyr::mutate(Type = paste0(substr(name, 1, 1), "[", substr(name, 5, 7), "]",
+                substr(name, 3, 3))) %>%
+  tibble::column_to_rownames("Type")
+
+# add all additional signatures to ref
+ref <-
+  cbind(
+    ref,
+    SBS17 = refs$v2[rownames(ref), "Signature_17"],
+    machado_2022_SBSblood = machado[rownames(ref), "SBSblood"],
+    machado_2022_SignatureIg = machado[rownames(ref), "Signature.Ig"],
+    lodato_2018_ScB = lodato[rownames(ref), "B"],
+    petljak_2019_ScF = petljak[rownames(ref), "SBS sc_F"],
+    luquette_2022_PTA_artefact = luquette[rownames(ref), "pta_artefact"])
+
 sub_vec <-
   c("C>A","C>G","C>T","T>A","T>C","T>G")
 full_vec <-
   paste0(rep(c("A", "C", "G", "T"), each = 4), "[", rep(sub_vec, each = 16),
          "]", rep(c("A", "C", "G", "T"), times = 4))
-ref <- ref[full_vec, ]
+# ref <- ref[full_vec, ]
 
 # calculate cosine similarity between hdp and reference signatures
 # cosine similarity ranges 0-1, with 1 = perfect match

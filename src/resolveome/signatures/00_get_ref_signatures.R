@@ -24,11 +24,8 @@ refs <-
       as.matrix()
   })
 
-# use v3.5, replace 0 with small value and normalise
+# use v3.5
 ref <- refs$v3.5
-ref[is.na(ref) | ref == 0] <- 0.00001
-ref <- t(t(ref) / colSums(ref))
-ref <- ref %>% tibble::as_tibble(rownames = "Type")
 
 # SBSblood and SignatureIg from machado 2022
 machado <-
@@ -85,6 +82,12 @@ custom_ref <-
 ref <-
   ref %>%
   dplyr::left_join(custom_ref)
+
+# replace 0 with small value and normalise
+ref <- ref %>% tibble::column_to_rownames("Type") %>% as.matrix()
+ref[is.na(ref) | ref == 0] <- 0.00001
+ref <- t(t(ref) / colSums(ref))
+ref <- ref %>% tibble::as_tibble(rownames = "Type")
 
 # save ref
 ref %>%
