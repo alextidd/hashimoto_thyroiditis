@@ -1,0 +1,467 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 600,
+  cache.path = params$cache_path,
+  fig.align = "center",
+  dev = c("png", "pdf")
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(ape)
+
+# set ggplot presets
+theme_set(theme_classic())
+
+# inputs
+inputs_dir <- "/nfs/casm/team268im/at31/projects/hashimoto_thyroiditis/reports/20260206_paper_plots/inputs/"
+cell_shm_file <- file.path(inputs_dir, "20250902_pta_additional_annotation_H1.tsv")
+cell_annots_file <- file.path(inputs_dir, "H1_PD63118_pta_additional_annotation.tsv")
+muts_filtered_file <- file.path(inputs_dir, "H1_PD63118_DNAHyb_filtered_mutations.tsv")
+muts_rescued_file <- file.path(inputs_dir, "H1_PD63118_DNAHyb_rescued_mutations.tsv")
+tree_file <- file.path(inputs_dir, "Patient_both_tree_relabelled.tree")
+sigfit_exp_file <- file.path(inputs_dir, "sigfit_exposures_per_branch_with_indels.rds")
+trinuc_mut_mat_file <- file.path(inputs_dir, "trinuc_mut_mat_hdp.txt")
+per_branch_exp_filled_file <- file.path(inputs_dir, "per_branch_exposures_filled.rds")
+```
+
+# Load metadata
+
+```{r metadata}
+# set levels and palettes
+celltype_cols <-
+  c("non-naive B" = "#306b9b",
+    "naive B" = "#449842",
+    "alpha-beta T" = "#981c1e",
+    "not B or T" = "#999999FF")
+mut_lvls <-
+  c("TNFRSF14 + CD274 mut", "TNFRSF14 mut", "CD274 mut",
+    "TNFRSF14 WT + other mut")
+
+# get cell annotations
+cell_shm <-
+  readr::read_tsv(cell_shm_file) %>%
+  dplyr::select(cell_ID, well_ID, celltype_SHM)
+cell_annots <-
+  readr::read_tsv(cell_annots_file) %>%
+  dplyr::left_join(cell_shm) %>%
+  dplyr::mutate(
+    celltype = dplyr::case_when(
+      celltype_SHM == "Mature B cell" ~ "non-naive B",
+      celltype_VDJ_recomb == "B cell" ~ "naive B",
+      celltype_VDJ_recomb == "alpha-beta T cell" ~ "alpha-beta T",
+      TRUE ~ "not B or T"
+    ) %>% factor(levels = names(celltype_cols)),
+    mut = dplyr::case_when(
+      cell_ID %in% 42:47 ~ "TNFRSF14 WT + other mut",
+      !biallelic_TNFRSF14 %in% c("WT", "FALSE_Het") &
+        !biallelic_CD274 %in% c("WT", "FALSE_Het") ~ "TNFRSF14 + CD274 mut",
+      !biallelic_TNFRSF14 %in% c("WT", "FALSE_Het") ~ "TNFRSF14 mut",
+      !biallelic_CD274 %in% c("WT", "FALSE_Het") ~ "CD274 mut",
+      TRUE ~ NA_character_
+    ) %>% factor(levels = mut_lvls),
+    celltype_col = celltype_cols[celltype]) %>%
+  dplyr::arrange(celltype, mut) %>%
+  tidyr::unite(celltype_mut, mut, celltype, sep = " ", na.rm = TRUE,
+               remove = FALSE) %>%
+  dplyr::mutate(celltype_mut = forcats::fct_inorder(celltype_mut)) %>%
+  # create labels with newlines
+  dplyr::mutate(
+    celltype_mut_label = dplyr::case_when(
+      celltype_mut == "TNFRSF14 + CD274 mut non-naive B" ~ "TNFRSF14 +\nCD274 mut\nnon-naive B",
+      celltype_mut == "TNFRSF14 mut non-naive B" ~ "TNFRSF14 mut\nnon-naive B",
+      celltype_mut == "TNFRSF14 WT + other mut non-naive B" ~ "TNFRSF14 WT\n+ other mut\nnon-naive B",
+      TRUE ~ as.character(celltype_mut)),
+    celltype_mut_label = forcats::fct_inorder(celltype_mut_label))
+```
+
+# Phylogenetic tree
+
+```{r tree, fig.height = 10, fig.width = 10}
+# load tree
+tree <- ape::read.tree(tree_file)
+
+# create tree df
+tree_df <- as.data.frame(ggtree::fortify(tree))
+
+# get tip colours
+tip_cols <-
+  cell_annots %>%
+  dplyr::slice(match(as.numeric(tree$tip.label), cell_ID)) %>%
+  dplyr::pull(celltype_col)
+
+# get heatmap drivers
+muts <-
+  c(muts_filtered_file, muts_rescued_file) %>%
+  purrr::map(~
+    readr::read_tsv(.x) %>%
+      dplyr::transmute(id, gene, chr = as.character(chr),
+                       pos = as.character(pos), ref, alt)) %>%
+  bind_rows() %>%
+  filter(gene %in% c("TNFRSF14", "CD274")) %>%
+  mutate(well_ID = gsub("_dna.*", "", id)) %>%
+  inner_join(cell_annots %>% dplyr::select(well_ID, cell_ID))
+
+# get mrca edge of each shared mutations
+tips_ls <-
+  muts %>%
+  split(.$gene) %>%
+  purrr::map(function(gene_df) {
+    gene_df %>%
+      group_by(chr, pos, ref, alt) %>%
+      group_split() %>%
+      purrr::map(~ .x$cell_ID)
+  })
+
+# get gene colours
+if (length(tips_ls) == 1) {
+  gene_cols <- "orange"
+} else if (length(tips_ls) == 2) {
+  gene_cols <- c("orange", "purple")
+} else {
+  gene_cols <- RColorBrewer::brewer.pal(n = length(tips_ls), name = "Set1")
+}
+names(gene_cols) <- names(tips_ls)
+
+# plot tree
+par(family = "sans")
+plot(tree, cex = 0.65, font = 1, tip.color = tip_cols, label.offset = 0.003 * max(tree_df$x))
+coords <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+
+# start list of edges
+edges <- list()
+
+purrr::walk2(names(tips_ls), tips_ls, function(gene, gene_tips) {
+
+  edges[[gene]] <<- list()
+
+  purrr::walk(gene_tips, function(tips) {
+
+    # get edge before tip or mrca node
+    if (length(tips) == 1) {
+      mrca_node <- which(tree$tip.label == tips)
+      edge <- which(tree$edge[, 2] == mrca_node)
+    } else {
+      mrca_node <- getMRCA(tree, tips)
+      edge <- which(tree$edge[, 2] == mrca_node)
+
+      # make sure edge descends to tips only
+      desc_tips <- extract.clade(tree, mrca_node)$tip.label
+      if (!all(desc_tips %in% tips)) {
+        # if not, then get edge before each tip
+        edge <-
+          tips %>%
+          purrr::map(function(tip) {
+            which(tree$edge[, 2] == which(tree$tip.label == tip))
+          }) %>%
+          unlist()
+      }
+    }
+
+    # add edge(s) to list of edges
+    edges[[gene]] <<- c(edges[[gene]], list(edge))
+
+    for (e in edge) {
+      # edge coordinates (parent -> child)
+      x0 <- coords$xx[tree$edge[e, 1]]
+      y0 <- coords$yy[tree$edge[e, 1]]
+      x1 <- coords$xx[tree$edge[e, 2]]
+      y1 <- coords$yy[tree$edge[e, 2]]
+      x_shift <- 0.3 * strwidth("M", cex = 1)
+      if (gene == "TNFRSF14") {
+        x_shift <- x_shift * -1
+      }
+      x_mid <- (x0 + x1) / 2 + x_shift
+      y_mid <- y1
+
+      # add points
+      points(x_mid, y_mid, pch = 19, col = gene_cols[gene], cex = 1)
+    }
+
+  })
+
+})
+
+# add axis and legend
+axisPhylo(side = 1, backward = FALSE)
+legend("topright",
+       legend = c("Driver mutation", names(gene_cols), "Cell type",
+                  names(celltype_cols)),
+       text.font = c(2, rep(3, length(gene_cols)), 2,
+                     rep(1, length(celltype_cols))),
+       col = c(NA, gene_cols, rep("black", length(celltype_cols) + 1)),
+       pch = c(NA, rep(19, length(gene_cols)), NA,
+               rep(95, length(celltype_cols))),
+       pt.cex = 1,
+       cex = 0.7,
+       bty = "n",
+       text.col = c(rep("black", length(gene_cols) + 2), celltype_cols))
+```
+
+# Signature analysis
+
+## Phylogenetic tree with signature exposures
+
+```{r load_sf}
+# define the final sigs
+final_sigs <-
+  c("SBS1", "SBS5", "SBS9", "SBS17a", "SBS17b", "SBS85",
+    "machado_2022_SBSblood", "petljak_2019_ScF")
+
+# define sig colours
+sig_cols <-
+  c("black", RColorBrewer::brewer.pal(n = length(final_sigs), "Set2")) %>%
+  setNames(c("indels", final_sigs))
+
+# load sigfit exposures with indels
+sf_exp_w_indels <- readRDS(sigfit_exp_file)
+```
+
+### Tips coloured by celltype
+
+```{r tree_sigs, fig.width = 10, fig.height = 10}
+# create tree
+plot(tree, cex = 0.65, label.offset = 0.003 * max(tree_df$x),
+     tip.color = celltype_cols, font = 1)
+
+# for each sample, draw rectangles showing signature proportions
+for (sample in colnames(sf_exp_w_indels)) {
+  n <- as.numeric(substr(sample, 9, nchar(sample)))
+  x_end <- tree_df$x[n]
+  x_start <- tree_df$x[tree_df$parent[n]]
+  x_intv <- x_end - x_start
+  y <- node.height(tree)[n]
+  tipnum <- sum(tree_df$isTip)
+
+  # stack signature exposures proportionally along branch length
+  for (s in rownames(sf_exp_w_indels)) {
+    x_end <- x_start + sf_exp_w_indels[s, sample] * x_intv
+    rect(ybottom = y - min(0.015 * tipnum, 0.3),
+         ytop = y + min(0.015 * tipnum, 0.3),
+         xleft = x_start, xright = x_end, col = sig_cols[s], lwd = 0.25)
+    x_start <- x_end
+  }
+}
+
+# axis and legend
+axisPhylo(side = 1, backward = FALSE)
+legend("topright",
+       legend = c("Signature", names(sig_cols),
+                  "Cell type", names(celltype_cols)),
+       text.font = c(2, rep(1, length(sig_cols)), 2,
+                     rep(1, length(celltype_cols))),
+       col = c(NA, sig_cols, rep("black", length(celltype_cols) + 1)),
+       pch = c(NA, rep(19, length(sig_cols)), NA,
+                  rep(95, length(celltype_cols))),
+       pt.cex = 1,
+       cex = 0.7,
+       bty = "n",
+       text.col = c(rep("black", length(sig_cols) + 2), celltype_cols))
+```
+
+### Tips coloured by celltype-x-mutation status
+
+```{r tree_sigs_mut, fig.width = 10, fig.height = 10}
+# define celltype_mut tip colours
+celltype_mut_cols <-
+  RColorBrewer::brewer.pal(n = length(levels(cell_annots$celltype_mut)),
+                           name = "Dark2") %>%
+  setNames(levels(cell_annots$celltype_mut))
+celltype_mut_cols[c("naive B", "alpha-beta T", "not B or T")] <- "grey"
+tip_cols <-
+  cell_annots %>%
+  dplyr::slice(match(as.numeric(tree$tip.label), cell_ID)) %>%
+  dplyr::pull(celltype_mut) %>%
+  {celltype_mut_cols[.]}
+
+# create tree
+plot(tree, cex = 0.65, label.offset = 0.003 * max(tree_df$x),
+     tip.color = tip_cols, font = 1)
+
+# for each sample, draw rectangles showing signature proportions
+for (sample in colnames(sf_exp_w_indels)) {
+  n <- as.numeric(substr(sample, 9, nchar(sample)))
+  x_end <- tree_df$x[n]
+  x_start <- tree_df$x[tree_df$parent[n]]
+  x_intv <- x_end - x_start
+  y <- node.height(tree)[n]
+  tipnum <- sum(tree_df$isTip)
+
+  # stack signature exposures proportionally along branch length
+  for (s in rownames(sf_exp_w_indels)) {
+    x_end <- x_start + sf_exp_w_indels[s, sample] * x_intv
+    rect(ybottom = y - min(0.015 * tipnum, 0.3),
+         ytop = y + min(0.015 * tipnum, 0.3),
+         xleft = x_start, xright = x_end, col = sig_cols[s], lwd = 0.25)
+    x_start <- x_end
+  }
+}
+
+# axis and legend
+axisPhylo(side = 1, backward = FALSE)
+legend("topright",
+       legend = c("Signature", names(sig_cols),
+                  "Cell type and mutant status", names(celltype_mut_cols)),
+       text.font = c(2, rep(1, length(sig_cols)), 2,
+                     rep(1, length(celltype_mut_cols))),
+       col = c(NA, sig_cols, rep("black", length(celltype_mut_cols) + 1)),
+       pch = c(NA, rep(19, length(sig_cols)), NA,
+                  rep(95, length(celltype_mut_cols))),
+       pt.cex = 1,
+       cex = 0.55,
+       bty = "n",
+       text.col = c(rep("black", length(sig_cols) + 2), celltype_mut_cols))
+```
+
+## Trinucleotide spectra
+
+```{r trinuc_mut_mat}
+# define mutation type colours
+mut_type_cols <-
+  c("C>A" = "dodgerblue", "C>G" = "black", "C>T" = "red",
+    "T>A" = "grey70", "T>C" = "olivedrab3", "T>G" = "plum2")
+
+# load trinuc mut matrix
+trinuc_mut_mat <- read.table(trinuc_mut_mat_file, check.names = FALSE)
+
+# get all nodes leading to each tip for aggregating per cell
+nodes_to_tips <-
+  lapply(1:Ntip(tree), function(tip) {
+    nodepath(tree, from = tip, to = Ntip(tree) + 1)
+  }) %>%
+  setNames(tree$tip.label) %>%
+  tibble::enframe(name = "cell_ID", value = "node") %>%
+  tidyr::unnest(cols = node)
+
+# prepare plotting data
+p_dat <-
+  trinuc_mut_mat %>%
+  tibble::as_tibble(rownames = "sample") %>%
+  dplyr::mutate(node = as.numeric(gsub("Patient_", "", sample))) %>%
+  dplyr::left_join(nodes_to_tips) %>%
+  dplyr::group_by(cell_ID) %>%
+  dplyr::summarise(dplyr::across(dplyr::all_of(colnames(trinuc_mut_mat)), sum)) %>%
+  dplyr::left_join(cell_annots %>% dplyr::mutate(cell_ID = as.character(cell_ID)))
+```
+
+### Trinucleotide spectrum per celltype
+
+```{r tri_spectra_celltype, fig.width = 12, fig.height = 6}
+p_dat %>%
+  dplyr::group_by(celltype) %>%
+  dplyr::summarise(dplyr::across(dplyr::all_of(colnames(trinuc_mut_mat)), sum)) %>%
+  tidyr::pivot_longer(cols = -c("celltype")) %>%
+  dplyr::mutate(trinuc = paste0(substr(name, 5, 5), substr(name, 1, 1), substr(name, 7, 7)),
+                mut_type = substr(name, 1, 3)) %>%
+  ggplot(aes(x = trinuc, y = value, fill = mut_type)) +
+  geom_col() +
+  scale_fill_manual(values = mut_type_cols) +
+  facet_grid(celltype ~ mut_type, scales = "free", space = "free_x") +
+  theme_classic() +
+  theme(axis.text.x = element_text(family = "mono"),
+        axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.7),
+        strip.background = element_rect(colour = "black", fill = NA, linewidth = 0.7),
+        legend.position = "none", strip.text.y = element_text(angle = 90)) +
+  guides(x = guide_axis(angle = -90)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)))
+```
+
+### Trinucleotide spectrum per celltype-x-mutation status
+
+```{r tri_spectra_celltype_mut, fig.width = 12, fig.height = 11}
+p_dat %>%
+  dplyr::group_by(celltype_mut_label) %>%
+  dplyr::summarise(dplyr::across(dplyr::all_of(colnames(trinuc_mut_mat)), sum)) %>%
+  tidyr::pivot_longer(cols = -c("celltype_mut_label")) %>%
+  dplyr::mutate(trinuc = paste0(substr(name, 5, 5), substr(name, 1, 1), substr(name, 7, 7)),
+                mut_type = substr(name, 1, 3)) %>%
+  ggplot(aes(x = trinuc, y = value, fill = mut_type)) +
+  geom_col() +
+  scale_fill_manual(values = mut_type_cols) +
+  facet_grid(celltype_mut_label ~ mut_type, scales = "free", space = "free_x") +
+  theme_classic() +
+  theme(axis.text.x = element_text(family = "mono"),
+        axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.7),
+        strip.background = element_rect(colour = "black", fill = NA, linewidth = 0.7),
+        legend.position = "none", strip.text.y = element_text(angle = 90)) +
+  guides(x = guide_axis(angle = -90)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)))
+```
+
+## Signature exposures per cell
+
+```{r sig_exposures_cell, fig.width = 17, fig.height = 8}
+# load exposures with filled-in branches
+per_branch_exp_final <- readRDS(per_branch_exp_filled_file)
+
+# get exposures per cell
+exp_per_cell <-
+  nodes_to_tips %>%
+  dplyr::left_join(per_branch_exp_final, by = c("node")) %>%
+  # calculate mutations per exposure
+  tidyr::pivot_longer(cols = dplyr::all_of(c("indels", final_sigs)),
+                      names_to = "signature", values_to = "exposure") %>%
+  dplyr::mutate(n_muts_exp = exposure * branch.length) %>%
+  dplyr::group_by(cell_ID, signature) %>%
+  dplyr::summarise(n_muts_exp = sum(n_muts_exp)) %>%
+  # calculate mutations per cell
+  dplyr::group_by(cell_ID) %>%
+  dplyr::mutate(total_n_muts = sum(n_muts_exp)) %>%
+  dplyr::ungroup() %>%
+  # add cell annots
+  dplyr::left_join(cell_annots %>% dplyr::mutate(cell_ID = as.character(cell_ID))) %>%
+  # factor axes
+  dplyr::mutate(cell_ID = forcats::fct_reorder(cell_ID, -total_n_muts),
+                signature = factor(signature, levels = rev(c("indels", final_sigs)))) %>%
+  # calculate proportions and numbers of mutations
+  dplyr::mutate(`n mutations` = n_muts_exp,
+                `% mutations` = n_muts_exp / total_n_muts) %>%
+  tidyr::pivot_longer(cols = c("n mutations", "% mutations"),
+                      names_to = "metric", values_to = "value") %>%
+  dplyr::mutate(metric = factor(metric, levels = c("n mutations", "% mutations")))
+
+# plot
+exp_per_cell %>%
+  ggplot(aes(x = cell_ID, y = value, fill = signature)) +
+  geom_col(width = 1.05) +
+  scale_fill_manual(values = sig_cols) +
+  guides(x = guide_axis(angle = 90)) +
+  theme_classic() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.spacing.y = unit(0.6, "lines"),
+        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.7),
+        strip.background = element_rect(colour = "black", fill = NA, linewidth = 0.7),
+        strip.text.y = element_text(angle = 90)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+  scale_x_discrete(expand = c(0, 0)) +
+  ggh4x::facet_nested(metric ~ celltype_mut_label, scales = "free", space = "free_x") +
+  ggtitle("by celltype and TNFRSF14/CD274 status")
+```

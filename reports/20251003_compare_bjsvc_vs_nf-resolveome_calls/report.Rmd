@@ -54,7 +54,7 @@ calls in the `Sequoia` output, and the driver genotyping calls made by
 ```{r load_data}
 # load cell annotations
 cell_annots <-
-  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  "data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv" %>%
   read_tsv()
 
 # load samplesheet

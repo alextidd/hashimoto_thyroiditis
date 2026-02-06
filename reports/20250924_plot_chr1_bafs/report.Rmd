@@ -84,7 +84,7 @@ Now we plot this phasing in all cells.
 ```{r plot_bafs, fig.width = 10, fig.height = 30}
 # get the final cells
 final_cells <-
-  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  "data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv" %>%
   readr::read_tsv()
 
 # pick independent events to plot

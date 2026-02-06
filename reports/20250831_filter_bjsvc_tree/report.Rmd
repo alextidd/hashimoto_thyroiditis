@@ -157,7 +157,7 @@ cell_annots <-
       transmute(id = biosampleName, cell_id = gsub("_dna.*", "", id)) %>%
       # add new cells ids + additional annotations
       left_join(
-        "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+        "data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv" %>%
           readr::read_tsv() %>%
           mutate(cell_id_new = as.character(cell_ID), cell_id = well_ID)
       )

@@ -1,0 +1,101 @@
+---
+title: "`r params$title`"
+author: "Alexandra Tidd"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    fig_width: 8
+    keep_md: true
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: lumen
+params:
+  title: null
+  cache_path: null
+  rerun: false
+---
+
+```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = "../..")
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  dpi = 300,
+  cache.path = params$cache_path,
+  fig.align = "center",
+  dev = "pdf"
+)
+```
+
+```{r setup2, include = FALSE}
+# libraries
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+
+# set ggplot presets
+theme_set(theme_classic())
+```
+
+```{r load_data}
+exp_per_cell <-
+  readRDS("out/resolveome/signatures/sigfit/exposures_per_cell.rds") %>%
+  split(.$signature)
+shm_per_cell <-
+  readr::read_tsv("data/resolveome/shm/shm_counts_per_cell_im3.tsv")
+```
+
+## Exposure per signature per celltype-x-mutation status
+
+1. Could you add Wilcoxon.test p-values of all classes against the "mature B WT group"?
+2. Could you generate the same plot for each of the other main signatures?
+
+```{r sigs_exp, fig.width = 3.5}
+my_comparisons <-
+  exp_per_cell[[1]] %>%
+  dplyr::filter(celltype_maturity == "mature B", celltype_mut != "mature B") %>%
+  dplyr::pull(celltype_mut) %>%
+  unique() %>%
+  as.character() %>%
+  purrr::map(~ c("mature B", .x))
+purrr::map2(names(exp_per_cell), exp_per_cell, function(sig, p_dat) {
+  p <-
+    p_dat %>%
+    ggplot(aes(x = celltype_mut, y = n_muts_exp)) +
+    geom_boxplot() +
+    geom_jitter(height = 0, width = 0.15, alpha = 0.5, size = 1)
+  p +
+    ggpubr::stat_compare_means(comparisons = my_comparisons,
+                               method = "wilcox.test",
+                               label = "p.format",
+                               method.args = list(alternative = "two.sided")) +
+    ggtitle(sig) +
+    theme(axis.text.x = element_text(size = 7),
+          axis.title.x = element_blank()) +
+    guides(x = guide_axis(angle = -90))
+})
+```
+
+## SHM per celltype-x-mutation status
+
+```{r shm_ex, fig.width = 3.5}
+cell_annots <-
+  exp_per_cell[[1]] %>%
+  dplyr::transmute(well_id = cell_id, celltype_mut)
+shm_per_cell %>%
+  dplyr::filter(BCR_sequence_reconstruction_confidence == "high") %>%
+  dplyr::left_join(cell_annots) %>%
+  ggplot(aes(x = celltype_mut, y = shm_fraction)) +
+  geom_boxplot() +
+  geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
+  ggpubr::stat_compare_means(comparisons = my_comparisons,
+                             method = "wilcox.test",
+                             label = "p.format",
+                             method.args = list(alternative = "two.sided")) +
+  ggtitle("SHM fraction") +
+  theme(axis.text.x = element_text(size = 7),
+        axis.title.x = element_blank()) +
+    guides(x = guide_axis(angle = -90))
+```

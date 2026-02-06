@@ -33,7 +33,7 @@ trinuc_mut_mat <-
 
 # get cell annots
 cell_annots <-
-  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  "data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv" %>%
   readr::read_tsv() %>%
   dplyr::transmute(
     cell_id = well_ID,
@@ -134,6 +134,27 @@ hdp_multi_chains <- hdp_extract_components(hdp_multi_chains_1)
 saveRDS(hdp_multi_chains, file = file.path(out_dir, "hdp_multi_chains.rds"))
 # hdp_multi_chains <- readRDS(file.path(out_dir, "hdp_multi_chains.rds"))
 
+# plot number of mutations per component
+pdf(file.path(out_dir, "de_novo_sigs_data_items_assigned_plot_no_hierarchy.pdf"))
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 2))
+plot_comp_size(hdp_multi_chains, bty = "L")
+dev.off()
+
+# get median number of mutations per component
+hdp_multi_chains %>%
+  comp_categ_counts() %>%
+  sapply(rowSums) %>%
+  t() %>%
+  tibble::as_tibble(rownames = "component") %>%
+  tidyr::pivot_longer(
+    cols = -c("component"), names_to = "iteration", values_to = "n_muts") %>%
+  dplyr::group_by(component) %>%
+  dplyr::summarise(median_n_muts = median(n_muts)) %>%
+  dplyr::mutate(total_muts = sum(trinuc_mut_mat),
+                prop_muts = median_n_muts / total_muts)
+
+
+
 # plot extracted signatures
 # component 0 is the "background" component (noise/artefacts)
 for (i in 0:hdp_multi_chains@numcomp) {
@@ -208,10 +229,36 @@ p <-
 (p + geom_col(position = "fill") + facet_grid(~ biallelic_CD274, scales = "free_x", space = "free_x"))
 dev.off()
 
+# plot exposures per plate
+pdf(file.path(out_dir, "signature_attribution_per_plate.pdf"),
+    width = 12, height = 8)
+p_dat <-
+  cell_exposures %>%
+  dplyr::mutate(plate = gsub("_.*", "", cell_id))
+(p_dat %>%
+  ggplot(aes(x = reorder(cell_id, -n_muts), y = n_muts_exp, fill = component)) +
+  guides(x = guide_axis(angle = -90)) +
+  theme_classic() +
+  scale_fill_brewer(palette = "Dark2") +
+  theme(axis.title.x = element_blank()) +
+  geom_col() +
+  facet_grid(~ plate, scales = "free_x", space = "free_x") +
+  ggtitle("Signature exposure per cell per plate")) /
+(p_dat %>%
+  dplyr::filter(component == "N5") %>%
+  dplyr::mutate(prop_muts_exp = n_muts_exp / n_muts) %>%
+  ggplot(aes(x = plate, y = prop_muts_exp)) +
+  geom_boxplot() +
+  geom_jitter(height = 0)) +
+  theme_classic() +
+  ggtitle("% N5 exposure per cell per plate")
+dev.off()
+
 # extract signature profiles (96-context distributions)
 hdp_sigs <- as.data.frame(t(comp_categ_distn(hdp_multi_chains)$mean))
 colnames(hdp_sigs) <- paste0("N", colnames(hdp_sigs))
 write.table(hdp_sigs, file.path(out_dir, "hdp_sigs.txt"))
+# hdp_sigs <- read.table(file.path(out_dir, "hdp_sigs.txt"), header = TRUE, row.names = 1)
 
 # get ordering of substitutions
 sub_vec <- c("C>A", "C>G", "C>T", "T>A", "T>C", "T>G")
@@ -323,7 +370,8 @@ candidate_sigs <-
   list(
     c("luquette_2022_PTA_artefact", core_sigs),
     c("lodato_2018_ScB", core_sigs),
-    c("lodato_2018_ScB", "SBS85", "SBS40a", core_sigs))
+    c("lodato_2018_ScB", "SBS85", "SBS40a", core_sigs),
+    c("petljak_2019_ScF", "SBS85", core_sigs))
 names(candidate_sigs) <-
   lapply(candidate_sigs, function(x) {paste(x, collapse = ",")}) %>%
   gsub("SBS", "", .)

@@ -1,0 +1,6 @@
+id	donor_id	chr	pos	ref	alt	gene	strand	ref_cod	mut_cod	ref3_cod	mut3_cod	aachange	ntchange	codonsub	impact	pid	total_depth	alt_depth	alt_vaf	type
+plate10_wellG9_dnahyb_run50227	PD63118	1	2491325	C	CAGGCCGAGCGTCTGGCTTATCA	TNFRSF14	1	.	.	.	.	.	367-368-insfrshift	.	no-SNV	ENSP00000347948	65	61	0.938461538	ins
+plate3_wellE10_dnahyb_run49900	PD63118	1	2488127	GCCTCCTCCCTGGAGATCCACCCC	G	TNFRSF14	1	.	.	.	.	.	25-47-delfrshift	.	no-SNV	ENSP00000347948	65	62	0.953846154	del
+plate3_wellC8_dnahyb_run49900	PD63118	1	2492114	CTCCCAATGGGACCCTGGAGGAA	C	TNFRSF14	1	.	.	.	.	.	513-534-delfrshift	.	no-SNV	ENSP00000347948	62	58	0.935483871	del
+plate10_wellA8_dnahyb_run50227	PD63118	9	5162804_5163906_5163753_5622496	.	.	CD274	1	.	.	.	.	.	.	.	no-SNV	ENSP00000370989	.	.	1	Gene_Del+Inv
+plate3_wellD4_dnahyb_run49900	PD63118	9	5465166_5466809	.	.	CD274	1	.	.	.	.	.	.	.	no-SNV	ENSP00000370989	.	.	1	Ex5_Ex6_Del

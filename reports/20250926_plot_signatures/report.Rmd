@@ -105,7 +105,7 @@ plot_spectrum_per_group <- function(muts_i, i) {
 ```{r load_data}
 # get cell annotations
 cell_annots <-
-  "data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv" %>%
+  "data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv" %>%
   readr::read_tsv() %>%
   mutate(
     cell_ID = as.character(cell_ID),
