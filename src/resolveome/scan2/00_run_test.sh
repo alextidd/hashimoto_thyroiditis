@@ -12,6 +12,7 @@ out_dir=$lustre_dir/out/resolveome/scan2/test/
 bam_dir=$lustre_dir/data/bams/
 bulk_dir=$bam_dir/merged_non_lymphocytes/
 work_dir=$lustre_dir/work/scan2/test/
+log_dir=$out_dir/log/
 mkdir -p $bam_dir $out_dir $work_dir $log_dir
 
 # set paths
@@ -48,7 +49,8 @@ fi
     --ref $wd/data/scan2/GRCh37/genome.fa \
     --dbsnp $NFS_TEAM/reference/dbsnp/GRCh37/common_all_20180423.vcf \
     --shapeit-refpanel $NFS_TEAM/reference/shapeit/GRCh37/ \
-    --regions 1:2480000-2500000,9:5450000-5471000 \
+    --regions 1:1-10000000,9:1-10000000 \
+    # --regions 1:2480000-2500000,9:5450000-5471000 \
     --bulk-bam $bulk_dir/merged_wgs_non_lymphocytes.bam \
     $(cat $out_dir/bams.txt | awk '{print "--sc-bam " $0}' | tr '\n' ' ')
   scan2 validate

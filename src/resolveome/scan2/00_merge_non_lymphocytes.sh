@@ -13,7 +13,7 @@ mkdir -p $bulk_dir
 
 # 3 WGS bams from non-lymphocyte cells
 # check that they have dna, get bam paths
-cat data/resolveome/manual_inspection/pta_additional_annotation_H1.tsv |
+cat data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv |
   awk -F'\t' '$10=="not lymphocyte" {print $2}' |
   awk -F, 'NR==FNR{a[$1]; next} FNR==1{next} $6=="dna" && $3 in a{print $NF}' - $ss |
   head -3 \

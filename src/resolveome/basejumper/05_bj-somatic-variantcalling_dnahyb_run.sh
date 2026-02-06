@@ -1,6 +1,8 @@
 #!/bin/bash
 # donor_id=PD63118
 # donor_id=PD66718
+# donor_id=PD63121
+# donor_id=PD63126
 # cd /nfs/casm/team268im/at31/projects/hashimoto_thyroiditis ; bsub -q week -M2000 -R 'span[hosts=1] select[mem>2000] rusage[mem=2000]' -J resolveome_basejumper_05_bj-somatic-variantcalling_dnahyb_run -o log/$(date +%Y-%m-%d-%H%M)_%J_resolveome_basejumper_05_bj-somatic-variantcalling_dnahyb_run.out -e log/$(date +%Y-%m-%d-%H%M)_%J_resolveome_basejumper_05_bj-somatic-variantcalling_dnahyb_run.err "bash src/resolveome/basejumper/05_bj-somatic-variantcalling_dnahyb_run.sh ${donor_id}"
 
 # parameters
