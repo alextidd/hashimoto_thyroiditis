@@ -25,7 +25,7 @@ knitr::opts_chunk$set(
   dpi = 300,
   cache.path = params$cache_path,
   fig.align = "center",
-  dev = "pdf"
+  dev = c("png", "pdf")
 )
 ```
 
@@ -60,13 +60,13 @@ my_comparisons <-
   unique() %>%
   as.character() %>%
   purrr::map(~ c("mature B", .x))
-purrr::map2(names(exp_per_cell), exp_per_cell, function(sig, p_dat) {
+purrr::walk2(names(exp_per_cell), exp_per_cell, function(sig, p_dat) {
   p <-
     p_dat %>%
+    dplyr::filter(metric == "n mutations") %>%
     ggplot(aes(x = celltype_mut, y = n_muts_exp)) +
-    geom_boxplot() +
-    geom_jitter(height = 0, width = 0.15, alpha = 0.5, size = 1)
-  p +
+    geom_boxplot(outlier.colour = NA) +
+    geom_jitter(height = 0, width = 0.15, alpha = 0.5, size = 1) +
     ggpubr::stat_compare_means(comparisons = my_comparisons,
                                method = "wilcox.test",
                                label = "p.format",
@@ -75,6 +75,7 @@ purrr::map2(names(exp_per_cell), exp_per_cell, function(sig, p_dat) {
     theme(axis.text.x = element_text(size = 7),
           axis.title.x = element_blank()) +
     guides(x = guide_axis(angle = -90))
+  print(p)
 })
 ```
 
@@ -86,9 +87,9 @@ cell_annots <-
   dplyr::transmute(well_id = cell_id, celltype_mut)
 shm_per_cell %>%
   dplyr::filter(BCR_sequence_reconstruction_confidence == "high") %>%
-  dplyr::left_join(cell_annots) %>%
+  dplyr::left_join(cell_annots %>% dplyr::distinct(celltype_mut, well_id)) %>%
   ggplot(aes(x = celltype_mut, y = shm_fraction)) +
-  geom_boxplot() +
+  geom_boxplot(outlier.colour = NA) +
   geom_jitter(height = 0, width = 0.15, alpha = 0.5) +
   ggpubr::stat_compare_means(comparisons = my_comparisons,
                              method = "wilcox.test",

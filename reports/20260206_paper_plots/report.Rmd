@@ -103,7 +103,7 @@ cell_annots <-
 
 # Phylogenetic tree
 
-```{r tree, fig.height = 10, fig.width = 10}
+```{r}
 # load tree
 tree <- ape::read.tree(tree_file)
 
@@ -123,105 +123,153 @@ muts <-
     readr::read_tsv(.x) %>%
       dplyr::transmute(id, gene, chr = as.character(chr),
                        pos = as.character(pos), ref, alt)) %>%
-  bind_rows() %>%
-  filter(gene %in% c("TNFRSF14", "CD274")) %>%
-  mutate(well_ID = gsub("_dna.*", "", id)) %>%
-  inner_join(cell_annots %>% dplyr::select(well_ID, cell_ID))
+  bind_rows()
 
-# get mrca edge of each shared mutations
-tips_ls <-
-  muts %>%
-  split(.$gene) %>%
-  purrr::map(function(gene_df) {
-    gene_df %>%
-      group_by(chr, pos, ref, alt) %>%
-      group_split() %>%
-      purrr::map(~ .x$cell_ID)
+# function: plot drivers of interest on tree
+plot_drivers_on_tree <- function(genes_of_interest) {
+
+  # get heatmap drivers
+  p_dat <-
+    muts %>%
+    filter(gene %in% genes_of_interest) %>%
+    mutate(well_ID = gsub("_dna.*", "", id)) %>%
+    inner_join(cell_annots %>% dplyr::select(well_ID, cell_ID)) %>%
+    # reorder genes by number of mutations
+    dplyr::add_count(gene) %>%
+    dplyr::mutate(gene = forcats::fct_reorder(gene, -n)) %>%
+    # for klhl6 hotspot, separate 13/14 mutation from the 10 mutation
+    dplyr::mutate(
+      chr = dplyr::case_when(gene == "KLHL6" & cell_ID == 10 ~ "sep",
+                            TRUE ~ chr))
+
+  # get mrca edge of each shared mutations
+  tips_ls <-
+    p_dat %>%
+    split(.$gene) %>%
+    purrr::map(function(gene_df) {
+      gene_df %>%
+        group_by(chr, pos, ref, alt) %>%
+        group_split() %>%
+        purrr::map(~ as.character(.x$cell_ID))
+    }) %>% purrr::map(unique)
+
+  # get gene colours
+  gene_cols <-
+    RColorBrewer::brewer.pal(n = length(tips_ls), name = "Set3") %>%
+    setNames(names(tips_ls))
+  gene_cols[c("TNFRSF14", "CD274")] <- c("orange", "purple")
+
+  # plot tree
+  par(family = "sans")
+  plot(tree, cex = 0.65, font = 1, tip.color = tip_cols, label.offset = 0.003 * max(tree_df$x))
+  coords <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+
+  # start list of edges and track plotting
+  edges <- list()
+  edge_counts <- integer(0)  # track number of genes already plotted on each edge
+  edge_gene_plotted <- character(0)  # track which (edge, gene) pairs already plotted
+
+  purrr::walk2(names(tips_ls), tips_ls, function(gene, gene_tips) {
+
+    edges[[gene]] <<- list()
+
+    purrr::walk(gene_tips, function(tips) {
+
+      # get edge before tip or mrca node
+      if (length(tips) == 1) {
+        mrca_node <- which(tree$tip.label == tips)
+        edge <- which(tree$edge[, 2] == mrca_node)
+      } else {
+        mrca_node <- getMRCA(tree, tips)
+        edge <- which(tree$edge[, 2] == mrca_node)
+
+        # make sure edge descends to tips only
+        desc_tips <- extract.clade(tree, mrca_node)$tip.label
+        if (!all(desc_tips %in% tips)) {
+          # if not, then get edge before each tip
+          edge <-
+            tips %>%
+            purrr::map(function(tip) {
+              which(tree$edge[, 2] == which(tree$tip.label == tip))
+            }) %>%
+            unlist()
+        }
+      }
+
+      # add edge(s) to list of edges
+      edges[[gene]] <<- c(edges[[gene]], list(edge))
+
+      for (e in edge) {
+        # skip if this (edge, gene) combination was already plotted
+        edge_gene_key <- paste(e, gene, sep = "_")
+        if (edge_gene_key %in% edge_gene_plotted) next
+        edge_gene_plotted <<- c(edge_gene_plotted, edge_gene_key)
+        
+        # edge coordinates (parent -> child)
+        x0 <- coords$xx[tree$edge[e, 1]]
+        y0 <- coords$yy[tree$edge[e, 1]]
+        x1 <- coords$xx[tree$edge[e, 2]]
+        y1 <- coords$yy[tree$edge[e, 2]]
+        
+        # get the current count for this edge and increment
+        edge_key <- as.character(e)
+        if (is.na(edge_counts[edge_key])) {
+          edge_counts[edge_key] <<- 0
+        }
+        current_count <- edge_counts[edge_key]
+        edge_counts[edge_key] <<- current_count + 1
+        
+        # shift each successive gene further (alternating left/right from center)
+        # count 0 -> shift 0 (centered), count 1 -> shift right, count 2 -> shift left, etc.
+        base_shift <- 0.6 * strwidth("M", cex = 1)
+        if (current_count == 0) {
+          x_shift <- 0
+        } else {
+          # alternate: 1 -> +1, 2 -> -1, 3 -> +2, 4 -> -2, etc.
+          direction <- ifelse(current_count %% 2 == 1, 1, -1)
+          magnitude <- ceiling(current_count / 2)
+          x_shift <- base_shift * magnitude * direction
+        }
+        
+        x_mid <- (x0 + x1) / 2 + x_shift
+        y_mid <- y1
+
+        # add points
+        points(x_mid, y_mid, pch = 19, col = gene_cols[gene], cex = 1)
+      }
+
+    })
+
   })
 
-# get gene colours
-if (length(tips_ls) == 1) {
-  gene_cols <- "orange"
-} else if (length(tips_ls) == 2) {
-  gene_cols <- c("orange", "purple")
-} else {
-  gene_cols <- RColorBrewer::brewer.pal(n = length(tips_ls), name = "Set1")
+  # add axis and legend
+  axisPhylo(side = 1, backward = FALSE)
+  legend("bottomright",
+        legend = c("Driver mutation", names(gene_cols), "Cell type",
+                    names(celltype_cols)),
+        text.font = c(2, rep(3, length(gene_cols)), 2,
+                      rep(1, length(celltype_cols))),
+        col = c(NA, gene_cols, rep("black", length(celltype_cols) + 1)),
+        pch = c(NA, rep(19, length(gene_cols)), NA,
+                rep(95, length(celltype_cols))),
+        pt.cex = 1,
+        cex = 0.7,
+        bty = "n",
+        text.col = c(rep("black", length(gene_cols) + 2), celltype_cols))
 }
-names(gene_cols) <- names(tips_ls)
+```
 
-# plot tree
-par(family = "sans")
-plot(tree, cex = 0.65, font = 1, tip.color = tip_cols, label.offset = 0.003 * max(tree_df$x))
-coords <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+## Tree with TNFRSF14 and CD274 mutations
 
-# start list of edges
-edges <- list()
+```{r tree, fig.height = 10, fig.width = 10}
+plot_drivers_on_tree(genes_of_interest = c("TNFRSF14", "CD274"))
+```
 
-purrr::walk2(names(tips_ls), tips_ls, function(gene, gene_tips) {
+## Tree with all drivers of interest
 
-  edges[[gene]] <<- list()
-
-  purrr::walk(gene_tips, function(tips) {
-
-    # get edge before tip or mrca node
-    if (length(tips) == 1) {
-      mrca_node <- which(tree$tip.label == tips)
-      edge <- which(tree$edge[, 2] == mrca_node)
-    } else {
-      mrca_node <- getMRCA(tree, tips)
-      edge <- which(tree$edge[, 2] == mrca_node)
-
-      # make sure edge descends to tips only
-      desc_tips <- extract.clade(tree, mrca_node)$tip.label
-      if (!all(desc_tips %in% tips)) {
-        # if not, then get edge before each tip
-        edge <-
-          tips %>%
-          purrr::map(function(tip) {
-            which(tree$edge[, 2] == which(tree$tip.label == tip))
-          }) %>%
-          unlist()
-      }
-    }
-
-    # add edge(s) to list of edges
-    edges[[gene]] <<- c(edges[[gene]], list(edge))
-
-    for (e in edge) {
-      # edge coordinates (parent -> child)
-      x0 <- coords$xx[tree$edge[e, 1]]
-      y0 <- coords$yy[tree$edge[e, 1]]
-      x1 <- coords$xx[tree$edge[e, 2]]
-      y1 <- coords$yy[tree$edge[e, 2]]
-      x_shift <- 0.3 * strwidth("M", cex = 1)
-      if (gene == "TNFRSF14") {
-        x_shift <- x_shift * -1
-      }
-      x_mid <- (x0 + x1) / 2 + x_shift
-      y_mid <- y1
-
-      # add points
-      points(x_mid, y_mid, pch = 19, col = gene_cols[gene], cex = 1)
-    }
-
-  })
-
-})
-
-# add axis and legend
-axisPhylo(side = 1, backward = FALSE)
-legend("topright",
-       legend = c("Driver mutation", names(gene_cols), "Cell type",
-                  names(celltype_cols)),
-       text.font = c(2, rep(3, length(gene_cols)), 2,
-                     rep(1, length(celltype_cols))),
-       col = c(NA, gene_cols, rep("black", length(celltype_cols) + 1)),
-       pch = c(NA, rep(19, length(gene_cols)), NA,
-               rep(95, length(celltype_cols))),
-       pt.cex = 1,
-       cex = 0.7,
-       bty = "n",
-       text.col = c(rep("black", length(gene_cols) + 2), celltype_cols))
+```{r tree_all_drivers, fig.height = 10, fig.width = 10}
+plot_drivers_on_tree(
+  genes_of_interest = c("TNFRSF14", "CD274", "BRAF", "TET2", "PIK3CD", "PLCG2", "RRAGC", "KLHL6", "CXCR3", "RASA2"))
 ```
 
 # Signature analysis

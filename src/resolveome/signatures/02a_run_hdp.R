@@ -32,9 +32,14 @@ trinuc_mut_mat <-
   trinuc_mut_mat[apply(trinuc_mut_mat, 1, sum) > 50, ]
 
 # get cell annots
+cell_shm <-
+  "data/resolveome/manual_inspection/20250902_pta_additional_annotation_H1.tsv" %>%
+  readr::read_tsv() %>%
+  dplyr::select(well_ID, celltype_SHM)
 cell_annots <-
   "data/resolveome/manual_inspection/H1_PD63118_pta_additional_annotation.tsv" %>%
   readr::read_tsv() %>%
+  dplyr::left_join(cell_shm) %>%
   dplyr::transmute(
     cell_id = well_ID,
     celltype = case_when(celltype_SHM == "Mature B cell" ~ "Mature B cell",
@@ -153,8 +158,6 @@ hdp_multi_chains %>%
   dplyr::mutate(total_muts = sum(trinuc_mut_mat),
                 prop_muts = median_n_muts / total_muts)
 
-
-
 # plot extracted signatures
 # component 0 is the "background" component (noise/artefacts)
 for (i in 0:hdp_multi_chains@numcomp) {
@@ -248,10 +251,11 @@ p_dat <-
   dplyr::filter(component == "N5") %>%
   dplyr::mutate(prop_muts_exp = n_muts_exp / n_muts) %>%
   ggplot(aes(x = plate, y = prop_muts_exp)) +
-  geom_boxplot() +
-  geom_jitter(height = 0)) +
+  geom_boxplot(outlier.colour = NA) +
+  geom_jitter(height = 0) +
   theme_classic() +
-  ggtitle("% N5 exposure per cell per plate")
+  ggtitle("% N5 exposure per cell per plate") +
+  ggpubr::stat_compare_means(method = "wilcox.test", label = "p.format"))
 dev.off()
 
 # extract signature profiles (96-context distributions)
@@ -268,7 +272,7 @@ full_vec <- paste0(rep(c("A", "C", "G", "T"), each = 4), "[",
 
 # load cosmic reference signatures
 refs <-
-  c("v2", "v3.4") %>%
+  c("v2", "v3.5") %>%
   purrr::set_names() %>%
   purrr::map(function(v) {
     readr::read_tsv(paste0("../../reference/cosmic/COSMIC_", v, "_SBS_GRCh38.txt")) %>%
@@ -278,8 +282,8 @@ refs <-
       as.matrix()
   })
 
-# use v3.4, replace 0 with small value and normalise
-ref <- refs$v3.4
+# use v3.5, replace 0 with small value and normalise
+ref <- refs$v3.5
 ref[is.na(ref) | ref == 0] <- 0.00001
 ref <- t(t(ref) / colSums(ref))
 
