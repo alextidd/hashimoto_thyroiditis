@@ -37,7 +37,7 @@ cut -d, -f11 \
 >> $out_dir/bams.txt
 
 # initiate outdir
-if [ ! -d $out_dir ]; then
+if [ ! -f $out_dir/scan.yaml ]; then
   scan2 -d $out_dir init
 fi
 

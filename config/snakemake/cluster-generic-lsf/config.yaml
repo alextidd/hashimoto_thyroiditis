@@ -1,0 +1,17 @@
+executor: cluster-generic
+jobs: 500
+latency-wait: 60
+keep-going: true
+printshellcmds: true
+max-status-checks-per-second: 5
+rerun-incomplete: true
+retries: 1
+resources:
+  mem_mb: 240000
+
+# Set up environment on worker nodes - directly set PATH to conda env bin
+precommand: "export PATH=/software/conda/users/at31/scan2_dev/bin:$PATH && export R_LIBS_USER=/software/conda/users/at31/scan2_dev/lib/R/library && export LD_LIBRARY_PATH=/software/conda/users/at31/scan2_dev/lib:$LD_LIBRARY_PATH && unset R_HOME"
+
+cluster-generic-submit-cmd: "bsub -J {rule} -q basement -n {threads} -M {resources.mem_mb} -R 'select[mem>{resources.mem_mb}] rusage[mem={resources.mem_mb}] span[hosts=1]' -W 336:00 -o cluster-logs/%J_{rule}.out -e cluster-logs/%J_{rule}.err"
+cluster-generic-status-cmd: "bash -c 'JOBID=$(echo $1 | grep -oP \"(?<=Job <)[0-9]+(?=>)\"); STATUS=$(bjobs -noheader -o stat $JOBID 2>/dev/null); case $STATUS in PEND|RUN|WAIT|PSUSP|USUSP|SSUSP) echo running;; DONE) echo success;; *) echo failed;; esac' --"
+cluster-generic-cancel-cmd: "bkill"
