@@ -9,6 +9,11 @@ retries: 1
 resources:
   mem_mb: 240000
 
+# Override memory for specific rules
+set-resources:
+  genotype:
+    mem_mb: 32000
+
 # Set up environment on worker nodes - directly set PATH to conda env bin
 precommand: "export PATH=/software/conda/users/at31/scan2_dev/bin:$PATH && export R_LIBS_USER=/software/conda/users/at31/scan2_dev/lib/R/library && export LD_LIBRARY_PATH=/software/conda/users/at31/scan2_dev/lib:$LD_LIBRARY_PATH && unset R_HOME"
 

@@ -1,70 +1,65 @@
 #!/bin/bash
 # runsub src/resolveome/scan2/03_run_develop_merged_normal.sh -M 20000
 
-# modules
+# conda env
 module load ISG/conda
-module load snakemake/9.13.4
-module load gatk/4.5.0.0
-module load bedtools2-2.31.1/python-3.10.10
-module load samtools-1.19.2/python-3.11.6
-module load bcftools-1.19/python-3.11.6
-
-# clear system contamination
-unset PYTHONPATH
+conda activate scan2_dev
 unset R_HOME
-
-# load conda env
-conda activate scan2-py311
 
 # dirs
 wd=$(pwd)
-scan2_dir=${NFS_TEAM}bin/repos/SCAN2
-lustre_dir=${LUSTRE_125}projects/hashimoto_thyroiditis
-out_dir=$lustre_dir/out/resolveome/scan2/PD63118_develop_merged_normal/
+scan2_dir=$NFS_TEAM/bin/repos/SCAN2
+snakefile=$scan2_dir/snakemake/Snakefile
+lustre_dir=$LUSTRE_125/projects/hashimoto_thyroiditis/
 bam_dir=$lustre_dir/data/bams/
 bulk_dir=$bam_dir/merged_non_lymphocytes/
+out_dir=$lustre_dir/out/resolveome/scan2/PD63118_develop_merged_normal/
 work_dir=$lustre_dir/work/scan2/PD63118_develop_merged_normal/
+mkdir -p $bam_dir $work_dir
 
-# set paths
+# set paths (user lib first to prioritize develop r-scan2, then conda lib for dependencies)
+export R_LIBS_USER=/software/conda/users/at31/scan2_dev/lib/R/library
+export RETICULATE_PYTHON=/software/conda/users/at31/scan2_dev/bin/python
+export LD_LIBRARY_PATH=/software/conda/users/at31/scan2_dev/lib:$LD_LIBRARY_PATH
 export TMPDIR=$work_dir
-export R_LIBS_USER=/software/conda/users/at31/scan2-py311/lib/R/library
-# export R_LIBS=/software/conda/users/at31/scan2/lib/R/library
-# export R_LIBS_USER=/software/conda/users/at31/scan2/lib/R/library
-export RETICULATE_PYTHON=/software/conda/users/at31/scan2/bin/python
 export XDG_CACHE_HOME=$work_dir
 
-# initiate outdir
-if [ ! -d $out_dir ]; then
-  $scan2_dir/bin/scan2 -d $out_dir init
-fi
+# initiate and configure outdir (only run once to avoid retriggering pipeline)
+if [ ! -f $out_dir/scan.yaml ]; then
 
-# set up
-(
-  cd $out_dir
-  $scan2_dir/bin/scan2 config \
-    --verbose \
-    --genome hs37d5 \
-    --gatk gatk3_joint \
-    --ref $wd/data/scan2/GRCh37/genome.fa \
-    --dbsnp $NFS_TEAM/reference/dbsnp/GRCh37/common_all_20180423.vcf \
-    --shapeit-refpanel $NFS_TEAM/reference/shapeit/GRCh37/ \
-    --scripts $scan2_dir/scripts/ \
-    --resources $scan2_dir/resources/ \
-    --regions-file $wd/out/resolveome/scan2/windows/windows.bed \
-    --sex male \
-    --bulk-bam $bulk_dir/merged_wgs_non_lymphocytes.bam \
-    $(grep "_dna_" $bam_dir/samplesheet_local.csv | cut -f14 -d, | awk '{print "--sc-bam " $0}' | tr '\n' ' ')
-  $scan2_dir/bin/scan2 validate
-)
+  # initiate outdir
+  $scan2_dir/bin/scan2 -d $out_dir --snakefile $snakefile init
+
+  # configure outdir
+  (
+    cd $out_dir
+    $scan2_dir/bin/scan2 \
+      --snakefile $snakefile \
+      config \
+      --verbose \
+      --scripts $scan2_dir/scripts \
+      --resources $scan2_dir/resources \
+      --ref $wd/data/scan2/GRCh37/genome.fa \
+      --dbsnp $NFS_TEAM/reference/dbsnp/GRCh37/common_all_20180423.vcf \
+      --shapeit-refpanel $NFS_TEAM/reference/shapeit/GRCh37/ \
+      --regions-file $wd/out/resolveome/scan2/windows/windows.bed \
+      --sex male \
+      --gatk gatk4_joint \
+      --bulk-bam $bulk_dir/merged_wgs_non_lymphocytes.bam \
+      $(grep "_dna_" $bam_dir/samplesheet_local.csv | cut -f11 -d, | awk '{print "--sc-bam " $0}' | tr '\n' ' ')
+    $scan2_dir/bin/scan2 --snakefile $snakefile validate
+  )
+
+else
+  echo "Config already exists at $out_dir/scan.yaml, skipping init/config"
+fi
 
 # run
 (
   cd $out_dir
   $scan2_dir/bin/scan2 \
-    --snakefile $scan2_dir/snakemake/Snakefile \
+    --snakefile $snakefile \
     call_mutations \
-    --joblimit 800 \
-    --abmodel-n-cores 10 \
-    --cluster "bsub -J {name} -q basement -M {resources.mem_mb} -R 'select[mem>{resources.mem_mb}] rusage[mem={resources.mem_mb}]' -n {threads} -o %logdir/%J_{name}.out -e %logdir/%J_{name}.err -env 'all'" \
-    --snakemake-args " --retries 2 --notemp --keep-going --latency-wait=60 --rerun-incomplete"
+    --joblimit 1000 \
+    --snakemake-args " --profile $wd/config/snakemake/cluster-generic-lsf"
 )
