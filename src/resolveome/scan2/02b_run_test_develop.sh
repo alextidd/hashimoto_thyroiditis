@@ -1,5 +1,5 @@
 #!/bin/bash
-# runsub src/resolveome/scan2/00_run_test_develop.sh
+# runsub src/resolveome/scan2/02b_run_test_develop.sh
 
 # conda env
 module load ISG/conda

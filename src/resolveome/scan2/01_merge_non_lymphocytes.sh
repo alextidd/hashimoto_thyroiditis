@@ -1,5 +1,5 @@
 #!/bin/bash
-# runsub src/resolveome/scan2/00_merge_non_lymphocytes.sh -M 40000 -n 8
+# runsub src/resolveome/scan2/01_merge_non_lymphocytes.sh -M 40000 -n 8
 
 # modules
 module load samtools-1.19.2/python-3.11.6
